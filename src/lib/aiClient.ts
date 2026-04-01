@@ -1,0 +1,192 @@
+import { GoogleGenAI } from '@google/genai';
+import { AIProvider } from '../types';
+
+const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
+const OPENAI_API_KEY = process.env.OPENAI_API_KEY;
+
+const GEMINI_TEXT_MODEL = process.env.GEMINI_MODEL || 'gemini-3-flash-preview';
+const GEMINI_EMBEDDING_MODEL =
+  process.env.GEMINI_EMBEDDING_MODEL || 'gemini-embedding-2-preview';
+const OPENAI_TEXT_MODEL = process.env.OPENAI_MODEL || 'gpt-4.1-mini';
+const OPENAI_EMBEDDING_MODEL =
+  process.env.OPENAI_EMBEDDING_MODEL || 'text-embedding-3-small';
+
+const OPENAI_API_BASE = 'https://api.openai.com/v1';
+
+export function getConfiguredAiProviders(): AIProvider[] {
+  const providers: AIProvider[] = [];
+  if (GEMINI_API_KEY) providers.push('gemini');
+  if (OPENAI_API_KEY) providers.push('openai');
+  return providers;
+}
+
+export function getPreferredAiProvider(): AIProvider | null {
+  const providers = getConfiguredAiProviders();
+  return providers[0] || null;
+}
+
+export async function createEmbeddingWithFallback(
+  input: string | string[],
+): Promise<{ provider: AIProvider; embeddings: number[][] }> {
+  const providers = getConfiguredAiProviders();
+
+  if (providers.length === 0) {
+    throw new Error('No AI provider configured. Add a Gemini or OpenAI API key.');
+  }
+
+  let lastError: unknown;
+
+  for (const provider of providers) {
+    try {
+      return {
+        provider,
+        embeddings: await createEmbeddings(provider, input),
+      };
+    } catch (error) {
+      console.warn(`Embedding request failed with ${provider}, trying next provider.`, error);
+      lastError = error;
+    }
+  }
+
+  throw lastError instanceof Error
+    ? lastError
+    : new Error('All embedding providers failed.');
+}
+
+export async function generateJsonWithFallback<T>(
+  prompt: string,
+): Promise<{ provider: AIProvider; result: T }> {
+  const providers = getConfiguredAiProviders();
+
+  if (providers.length === 0) {
+    throw new Error('No AI provider configured. Add a Gemini or OpenAI API key.');
+  }
+
+  let lastError: unknown;
+
+  for (const provider of providers) {
+    try {
+      const text = await generateJsonText(provider, prompt);
+      return {
+        provider,
+        result: JSON.parse(text) as T,
+      };
+    } catch (error) {
+      console.warn(`Generation request failed with ${provider}, trying next provider.`, error);
+      lastError = error;
+    }
+  }
+
+  throw lastError instanceof Error
+    ? lastError
+    : new Error('All text-generation providers failed.');
+}
+
+export function cosineSimilarity(a: number[], b: number[]) {
+  let dotProduct = 0;
+  let normA = 0;
+  let normB = 0;
+
+  for (let i = 0; i < Math.min(a.length, b.length); i += 1) {
+    dotProduct += a[i] * b[i];
+    normA += a[i] * a[i];
+    normB += b[i] * b[i];
+  }
+
+  if (normA === 0 || normB === 0) return 0;
+  return dotProduct / (Math.sqrt(normA) * Math.sqrt(normB));
+}
+
+async function createEmbeddings(
+  provider: AIProvider,
+  input: string | string[],
+): Promise<number[][]> {
+  if (provider === 'gemini') {
+    const ai = new GoogleGenAI({ apiKey: GEMINI_API_KEY });
+    const result = await ai.models.embedContent({
+      model: GEMINI_EMBEDDING_MODEL,
+      contents: input,
+    });
+    return result.embeddings.map((item) => item.values);
+  }
+
+  const response = await fetch(`${OPENAI_API_BASE}/embeddings`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${OPENAI_API_KEY}`,
+    },
+    body: JSON.stringify({
+      model: OPENAI_EMBEDDING_MODEL,
+      input,
+    }),
+  });
+
+  if (!response.ok) {
+    throw new Error(await extractOpenAIError(response));
+  }
+
+  const json = await response.json();
+  return Array.isArray(json.data)
+    ? json.data.map((item: { embedding: number[] }) => item.embedding)
+    : [];
+}
+
+async function generateJsonText(provider: AIProvider, prompt: string) {
+  if (provider === 'gemini') {
+    const ai = new GoogleGenAI({ apiKey: GEMINI_API_KEY });
+    const response = await ai.models.generateContent({
+      model: GEMINI_TEXT_MODEL,
+      contents: prompt,
+      config: {
+        responseMimeType: 'application/json',
+      },
+    });
+    return response.text || '';
+  }
+
+  const response = await fetch(`${OPENAI_API_BASE}/responses`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${OPENAI_API_KEY}`,
+    },
+    body: JSON.stringify({
+      model: OPENAI_TEXT_MODEL,
+      input: `${prompt}\n\nReturn only valid JSON.`,
+      max_output_tokens: 2500,
+      store: false,
+    }),
+  });
+
+  if (!response.ok) {
+    throw new Error(await extractOpenAIError(response));
+  }
+
+  const json = await response.json();
+  if (typeof json.output_text === 'string' && json.output_text.trim()) {
+    return json.output_text;
+  }
+
+  const textFromOutput = Array.isArray(json.output)
+    ? json.output
+        .flatMap((item: any) => item.content || [])
+        .map((item: any) => item.text || '')
+        .join('')
+    : '';
+
+  if (!textFromOutput.trim()) {
+    throw new Error('OpenAI returned an empty response.');
+  }
+
+  return textFromOutput;
+}
+
+async function extractOpenAIError(response: Response) {
+  try {
+    const json = await response.json();
+    return json?.error?.message || `OpenAI request failed with status ${response.status}.`;
+  } catch {
+    return `OpenAI request failed with status ${response.status}.`;
+  }
+}

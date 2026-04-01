@@ -1,0 +1,87 @@
+{
+  "entities": {
+    "Service": {
+      "title": "Service",
+      "description": "A church service event containing songs",
+      "type": "object",
+      "properties": {
+        "date": {
+          "type": "string",
+          "description": "The date of the service (YYYY-MM-DD)"
+        },
+        "fileName": {
+          "type": "string",
+          "description": "The original filename if imported"
+        },
+        "serviceType": {
+          "type": "string",
+          "description": "Type of service (e.g., AM, PM)"
+        },
+        "songs": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "List of song titles in the service"
+        }
+      },
+      "required": ["date", "serviceType", "songs"]
+    },
+    "Song": {
+      "title": "Song",
+      "description": "A song in the master database",
+      "type": "object",
+      "properties": {
+        "title": {
+          "type": "string",
+          "description": "The title of the song"
+        },
+        "alternate_title": {
+          "type": "string",
+          "description": "An alternate title for the song"
+        },
+        "lyrics": {
+          "type": "string",
+          "description": "The lyrics of the song"
+        },
+        "author": {
+          "type": "string",
+          "description": "The author of the song"
+        },
+        "ccli_number": {
+          "type": "string",
+          "description": "The CCLI number of the song"
+        },
+        "themes": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "Themes associated with the song"
+        },
+        "embedding": {
+          "type": "array",
+          "items": {
+            "type": "number"
+          },
+          "description": "AI embedding vector for the song"
+        }
+      },
+      "required": ["title"]
+    }
+  },
+  "firestore": {
+    "services/{serviceId}": {
+      "schema": {
+        "$ref": "#/entities/Service"
+      },
+      "description": "Collection of all church services"
+    },
+    "songs/{songId}": {
+      "schema": {
+        "$ref": "#/entities/Song"
+      },
+      "description": "Collection of all master songs and their metadata"
+    }
+  }
+}

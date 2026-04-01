@@ -1,0 +1,5 @@
+{
+  "name": "BBCQ Songs",
+  "description": "Upload OpenLP service files (.osz) to view statistics on song usage over time.",
+  "requestFramePermissions": []
+}

@@ -1,0 +1,111 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // ===============================================================
+    // Assumed Data Model
+    // ===============================================================
+    //
+    // Collection: users
+    // Document ID: {userId}
+    // Fields:
+    //   - role: string (required, 'admin' or 'user')
+    //
+    // Collection: services
+    // Document ID: {serviceId}
+    // Fields:
+    //   - date: string (required)
+    //   - fileName: string (optional)
+    //   - serviceType: string (required)
+    //   - songs: list of strings (required)
+    //
+    // Collection: songs
+    // Document ID: {songId}
+    // Fields:
+    //   - title: string (required)
+    //   - alternate_title: string (optional)
+    //   - lyrics: string (optional)
+    //   - author: string (optional)
+    //   - ccli_number: string (optional)
+    //   - themes: list of strings (optional)
+    //   - embedding: list of numbers (optional)
+    //
+    // ===============================================================
+
+    // ===============================================================
+    // Helper Functions
+    // ===============================================================
+    
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+
+    function isAdmin() {
+      return isAuthenticated() &&
+        (
+          (exists(/databases/$(database)/documents/users/$(request.auth.token.email)) && 
+           get(/databases/$(database)/documents/users/$(request.auth.token.email)).data.role == 'admin') ||
+          (request.auth.token.email == "johanson_ben@hotmail.com" && request.auth.token.email_verified == true)
+        );
+    }
+
+    function isOwner(userId) {
+      return isAuthenticated() && request.auth.uid == userId;
+    }
+
+    // ===============================================================
+    // Domain Validators
+    // ===============================================================
+
+    function isValidUser(data) {
+      return data.keys().hasOnly(['role', 'email']) &&
+             data.role in ['admin', 'user'] &&
+             (!('email' in data) || (data.email is string && data.email.size() <= 200));
+    }
+
+    function isValidService(data) {
+      return data.keys().hasAll(['date', 'serviceType', 'songs']) &&
+             data.date is string && data.date.size() > 0 && data.date.size() < 20 &&
+             data.serviceType is string && data.serviceType.size() > 0 && data.serviceType.size() < 10 &&
+             data.songs is list && data.songs.size() <= 100 &&
+             (!('fileName' in data) || (data.fileName is string && data.fileName.size() <= 200));
+    }
+
+    function isValidSong(data) {
+      return data.keys().hasAll(['title']) &&
+             data.title is string && data.title.size() > 0 && data.title.size() < 200 &&
+             (!('alternate_title' in data) || (data.alternate_title is string && data.alternate_title.size() <= 200)) &&
+             (!('lyrics' in data) || (data.lyrics is string && data.lyrics.size() <= 50000)) &&
+             (!('author' in data) || (data.author is string && data.author.size() <= 200)) &&
+             (!('ccli_number' in data) || (data.ccli_number is string && data.ccli_number.size() <= 50)) &&
+             (!('themes' in data) || (data.themes is list && data.themes.size() <= 50)) &&
+             (!('embedding' in data) || (data.embedding is list && data.embedding.size() <= 2000));
+    }
+
+    // ===============================================================
+    // Rules
+    // ===============================================================
+
+    match /users/{userEmail} {
+      allow read: if isAuthenticated();
+      allow create: if isAuthenticated() && isValidUser(request.resource.data) && ((request.auth.token.email == userEmail && request.resource.data.role == 'user') || isAdmin());
+      allow update: if isAuthenticated() && isValidUser(request.resource.data) && ((request.auth.token.email == userEmail && request.resource.data.role == resource.data.role) || isAdmin());
+      allow delete: if isAdmin();
+    }
+
+    match /services/{serviceId} {
+      allow read: if true;
+      allow create: if isValidService(request.resource.data);
+      allow update: if isValidService(request.resource.data);
+      allow delete: if isAdmin();
+    }
+
+    match /songs/{songId} {
+      allow read: if true;
+      allow create: if isValidSong(request.resource.data);
+      allow update: if isValidSong(request.resource.data);
+      allow delete: if isAdmin();
+    }
+  }
+}
