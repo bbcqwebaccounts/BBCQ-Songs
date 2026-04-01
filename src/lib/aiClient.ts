@@ -111,7 +111,7 @@ async function createEmbeddings(
     return result.embeddings.map((item) => item.values);
   }
 
-  const response = await fetch(`${OPENAI_API_BASE}/embeddings`, {
+  const response = await fetchWithFriendlyErrors(`${OPENAI_API_BASE}/embeddings`, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
@@ -121,7 +121,7 @@ async function createEmbeddings(
       model: OPENAI_EMBEDDING_MODEL,
       input,
     }),
-  });
+  }, 'OpenAI embeddings');
 
   if (!response.ok) {
     throw new Error(await extractOpenAIError(response));
@@ -146,7 +146,7 @@ async function generateJsonText(provider: AIProvider, prompt: string) {
     return response.text || '';
   }
 
-  const response = await fetch(`${OPENAI_API_BASE}/responses`, {
+  const response = await fetchWithFriendlyErrors(`${OPENAI_API_BASE}/responses`, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
@@ -158,7 +158,7 @@ async function generateJsonText(provider: AIProvider, prompt: string) {
       max_output_tokens: 2500,
       store: false,
     }),
-  });
+  }, 'OpenAI text generation');
 
   if (!response.ok) {
     throw new Error(await extractOpenAIError(response));
@@ -189,6 +189,23 @@ async function extractOpenAIError(response: Response) {
     return json?.error?.message || `OpenAI request failed with status ${response.status}.`;
   } catch {
     return `OpenAI request failed with status ${response.status}.`;
+  }
+}
+
+async function fetchWithFriendlyErrors(
+  input: RequestInfo | URL,
+  init: RequestInit,
+  context: string,
+) {
+  try {
+    return await fetch(input, init);
+  } catch (error) {
+    const message =
+      error instanceof Error ? error.message : 'Unknown network error';
+
+    throw new Error(
+      `${context} failed to reach the API. ${message}. This is usually a browser/network block rather than a Firebase issue. If you are using Brave, disable Shields for this site or allow requests to api.openai.com, then retry.`,
+    );
   }
 }
 

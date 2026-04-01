@@ -50,9 +50,15 @@ export function SongDetailsDialog({
   const [isConfirmDeleteOpen, setIsConfirmDeleteOpen] = useState(false);
   const [isEditingLyrics, setIsEditingLyrics] = useState(false);
 
+  const normalizeLyricsText = (lyrics?: string) =>
+    (lyrics || '')
+      .replace(/\\r\\n/g, '\n')
+      .replace(/\\n/g, '\n')
+      .replace(/\\r/g, '\n');
+
   useEffect(() => {
     setEditedTitle(viewingSong?.title || '');
-    setEditedLyrics(viewingSong?.lyrics || '');
+    setEditedLyrics(normalizeLyricsText(viewingSong?.lyrics));
     setNewTheme('');
     setIsSaving(false);
     setIsDeleting(false);
@@ -308,7 +314,7 @@ export function SongDetailsDialog({
                       </div>
                     ) : editedLyrics ? (
                       <div className="text-sm text-slate-700 whitespace-pre-wrap break-words font-sans w-full">
-                        {editedLyrics}
+                        {normalizeLyricsText(editedLyrics)}
                       </div>
                     ) : (
                       <div className="text-sm text-slate-400 italic">
