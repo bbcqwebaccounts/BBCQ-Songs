@@ -13,17 +13,12 @@ export interface ParsedLyricsResult {
 
 export const parseOpenLPLyrics = (xmlString: string): ParsedLyricsResult | string => {
   if (!xmlString || (!xmlString.includes('<?xml') && !xmlString.includes('<song') && !xmlString.includes('<lyrics>'))) {
-    console.log('Not XML format', xmlString);
     return xmlString;
   }
   try {
     const parser = new DOMParser();
     const xmlDoc = parser.parseFromString(xmlString, "text/xml");
     const verses = xmlDoc.getElementsByTagName("verse");
-    console.log('Found verses:', verses.length);
-    if (verses.length === 0) {
-        console.log('No verses found in XML', xmlString);
-    }
     let lyricsText = "";
     const parts: ParsedLyricPart[] = [];
     

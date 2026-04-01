@@ -14,6 +14,7 @@ import { Calendar, Loader2, Music, Plus, Save, Trash2, X } from 'lucide-react';
 import { format } from 'date-fns';
 import { SongUsage, SongMeta } from '../types';
 import { ConfirmDialog } from './ConfirmDialog';
+import { formatLyricLabel } from '../lib/songUtils';
 
 interface SongDetailsDialogProps {
   viewingSong: SongUsage | null;
@@ -47,6 +48,7 @@ export function SongDetailsDialog({
   const [isSaving, setIsSaving] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
   const [isConfirmDeleteOpen, setIsConfirmDeleteOpen] = useState(false);
+  const [isEditingLyrics, setIsEditingLyrics] = useState(false);
 
   useEffect(() => {
     setEditedTitle(viewingSong?.title || '');
@@ -55,6 +57,7 @@ export function SongDetailsDialog({
     setIsSaving(false);
     setIsDeleting(false);
     setIsConfirmDeleteOpen(false);
+    setIsEditingLyrics(false);
   }, [viewingSong]);
 
   const handleAddTheme = () => {
@@ -102,6 +105,7 @@ export function SongDetailsDialog({
 
       setEditedTitle(result.title);
       setEditedLyrics(result.lyrics);
+      setIsEditingLyrics(false);
       setViewingSong({
         ...viewingSong,
         title: result.title,
@@ -129,6 +133,11 @@ export function SongDetailsDialog({
     !!viewingSong &&
     (editedTitle.trim() !== viewingSong.title ||
       editedLyrics !== (viewingSong.lyrics || ''));
+
+  const partsToRender =
+    !isEditingLyrics && viewingSong?.parts && viewingSong.parts.length > 0
+      ? viewingSong.parts
+      : [];
 
   return (
     <>
@@ -210,15 +219,6 @@ export function SongDetailsDialog({
                         className="mt-2"
                       />
                     </div>
-                    <div>
-                      <label className="text-sm font-medium text-slate-700">Lyrics</label>
-                      <textarea
-                        value={editedLyrics}
-                        onChange={(e) => setEditedLyrics(e.target.value)}
-                        className="mt-2 min-h-[320px] w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
-                        placeholder="Song lyrics"
-                      />
-                    </div>
                     {!isAdmin && editedTitle.trim() !== viewingSong.title && (
                       <p className="text-xs text-amber-600">
                         Renaming a song requires admin access because service history references must be updated.
@@ -257,7 +257,7 @@ export function SongDetailsDialog({
                       <Calendar className="h-4 w-4 text-slate-500" />
                       Service History
                     </h4>
-                    <ScrollArea className="h-[320px] rounded-md border p-4">
+                    <ScrollArea className="h-[420px] rounded-md border p-4">
                       <div className="space-y-3">
                         {viewingSong.datesUsed.map((usage, index) => (
                           <div key={index} className="flex items-center justify-between border-b border-slate-100 pb-2 last:border-0 last:pb-0">
@@ -274,12 +274,39 @@ export function SongDetailsDialog({
                 </div>
 
                 <div>
-                  <h4 className="font-semibold mb-3 flex items-center gap-2">
-                    <Music className="h-4 w-4 text-slate-500" />
-                    Current Lyrics Preview
-                  </h4>
+                  <div className="mb-3 flex items-center justify-between gap-3">
+                    <h4 className="font-semibold flex items-center gap-2">
+                      <Music className="h-4 w-4 text-slate-500" />
+                      Lyrics
+                    </h4>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setIsEditingLyrics((prev) => !prev)}
+                    >
+                      {isEditingLyrics ? 'Preview Lyrics' : 'Edit Lyrics'}
+                    </Button>
+                  </div>
                   <div className="h-[600px] rounded-md border p-4 bg-slate-50 overflow-y-auto overflow-x-hidden">
-                    {editedLyrics ? (
+                    {isEditingLyrics ? (
+                      <textarea
+                        value={editedLyrics}
+                        onChange={(e) => setEditedLyrics(e.target.value)}
+                        className="h-full min-h-[540px] w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                        placeholder="Song lyrics"
+                      />
+                    ) : partsToRender.length > 0 ? (
+                      <div className="text-sm text-slate-700 whitespace-pre-wrap break-words font-sans w-full space-y-4">
+                        {partsToRender.map((part, index) => (
+                          <div key={`${part.type}-${part.label}-${index}`} className={part.type.toLowerCase() === 'c' ? 'pl-6 italic text-slate-600' : ''}>
+                            <div className="font-semibold text-xs text-slate-500 mb-1 uppercase tracking-wider">
+                              {formatLyricLabel(part.type, part.label)}
+                            </div>
+                            {part.text}
+                          </div>
+                        ))}
+                      </div>
+                    ) : editedLyrics ? (
                       <div className="text-sm text-slate-700 whitespace-pre-wrap break-words font-sans w-full">
                         {editedLyrics}
                       </div>

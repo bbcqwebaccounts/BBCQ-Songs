@@ -4,6 +4,7 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Sparkles, Loader2 } from 'lucide-react';
 import { SongUsage, SongMeta } from '../types';
+import { format } from 'date-fns';
 
 interface AIRecommendationsProps {
   aiPrompt: string;
@@ -107,6 +108,24 @@ export function AIRecommendations({
                     </CardHeader>
                     <CardContent className="p-4 pt-0">
                       <p className="text-sm text-slate-600 italic mb-3">{rec.reason}</p>
+                      <div className="grid grid-cols-2 gap-2 mb-3">
+                        <div className="rounded-md border bg-slate-50 px-3 py-2">
+                          <div className="text-[10px] font-medium uppercase tracking-wide text-slate-500">
+                            Times Used
+                          </div>
+                          <div className="text-sm font-semibold text-slate-900">
+                            {songData ? songData.count : 0}
+                          </div>
+                        </div>
+                        <div className="rounded-md border bg-slate-50 px-3 py-2">
+                          <div className="text-[10px] font-medium uppercase tracking-wide text-slate-500">
+                            Last Used
+                          </div>
+                          <div className="text-sm font-semibold text-slate-900">
+                            {songData && songData.count > 0 ? format(songData.lastUsed, 'MMM d, yyyy') : 'Never'}
+                          </div>
+                        </div>
+                      </div>
                       {songData?.themes && songData.themes.length > 0 && (
                         <div className="flex flex-wrap gap-1 mt-2">
                           {songData.themes.slice(0, 3).map(t => (

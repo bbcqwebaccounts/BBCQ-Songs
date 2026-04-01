@@ -67,9 +67,10 @@ export async function generateJsonWithFallback<T>(
   for (const provider of providers) {
     try {
       const text = await generateJsonText(provider, prompt);
+      const normalizedJson = extractJsonPayload(text);
       return {
         provider,
-        result: JSON.parse(text) as T,
+        result: JSON.parse(normalizedJson) as T,
       };
     } catch (error) {
       console.warn(`Generation request failed with ${provider}, trying next provider.`, error);
@@ -153,7 +154,7 @@ async function generateJsonText(provider: AIProvider, prompt: string) {
     },
     body: JSON.stringify({
       model: OPENAI_TEXT_MODEL,
-      input: `${prompt}\n\nReturn only valid JSON.`,
+      input: `${prompt}\n\nReturn only valid JSON. Do not wrap the JSON in markdown fences or add commentary.`,
       max_output_tokens: 2500,
       store: false,
     }),
@@ -189,4 +190,68 @@ async function extractOpenAIError(response: Response) {
   } catch {
     return `OpenAI request failed with status ${response.status}.`;
   }
+}
+
+function extractJsonPayload(text: string) {
+  const trimmed = text.trim();
+  if (!trimmed) {
+    throw new Error('AI provider returned an empty response.');
+  }
+
+  const deFenced = stripMarkdownFences(trimmed);
+  if (deFenced !== trimmed) {
+    try {
+      JSON.parse(deFenced);
+      return deFenced;
+    } catch {
+      // Keep trying additional salvage strategies below.
+    }
+  }
+
+  try {
+    JSON.parse(trimmed);
+    return trimmed;
+  } catch {
+    // Continue and try to salvage a fenced or prefixed JSON block.
+  }
+
+  const fencedMatch = trimmed.match(/```(?:json)?\s*([\s\S]*?)\s*```/i);
+  if (fencedMatch?.[1]) {
+    const candidate = fencedMatch[1].trim();
+    JSON.parse(candidate);
+    return candidate;
+  }
+
+  const firstBrace = trimmed.indexOf('{');
+  const firstBracket = trimmed.indexOf('[');
+  const startCandidates = [firstBrace, firstBracket].filter((value) => value >= 0);
+
+  if (startCandidates.length > 0) {
+    const start = Math.min(...startCandidates);
+    const lastBrace = trimmed.lastIndexOf('}');
+    const lastBracket = trimmed.lastIndexOf(']');
+    const end = Math.max(lastBrace, lastBracket);
+
+    if (end > start) {
+      const candidate = trimmed.slice(start, end + 1);
+      JSON.parse(candidate);
+      return candidate;
+    }
+  }
+
+  throw new Error(`AI provider returned invalid JSON: ${trimmed.slice(0, 200)}`);
+}
+
+function stripMarkdownFences(text: string) {
+  let value = text.trim();
+
+  if (value.startsWith('```')) {
+    value = value.replace(/^```[a-zA-Z]*\s*/, '');
+  }
+
+  if (value.endsWith('```')) {
+    value = value.replace(/\s*```$/, '');
+  }
+
+  return value.trim();
 }

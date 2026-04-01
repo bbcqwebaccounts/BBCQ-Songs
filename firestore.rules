@@ -30,6 +30,7 @@ service cloud.firestore {
     //   - ccli_number: string (optional)
     //   - themes: list of strings (optional)
     //   - embedding: list of numbers (optional)
+    //   - embeddingProvider: string (optional, 'gemini' or 'openai')
     //
     // ===============================================================
 
@@ -80,7 +81,8 @@ service cloud.firestore {
              (!('author' in data) || (data.author is string && data.author.size() <= 200)) &&
              (!('ccli_number' in data) || (data.ccli_number is string && data.ccli_number.size() <= 50)) &&
              (!('themes' in data) || (data.themes is list && data.themes.size() <= 50)) &&
-             (!('embedding' in data) || (data.embedding is list && data.embedding.size() <= 2000));
+             (!('embedding' in data) || (data.embedding is list && data.embedding.size() <= 4000)) &&
+             (!('embeddingProvider' in data) || (data.embeddingProvider in ['gemini', 'openai']));
     }
 
     // ===============================================================
