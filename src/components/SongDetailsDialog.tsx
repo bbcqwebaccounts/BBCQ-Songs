@@ -22,6 +22,7 @@ interface SongDetailsDialogProps {
   selectedSongsForChart: string[];
   toggleSongSelection: (title: string, e: React.MouseEvent) => void;
   songMetadata: Record<string, SongMeta>;
+  allSongs: SongUsage[];
   updateSongThemes: (title: string, themes: string[]) => void;
   onSaveSong: (
     currentTitle: string,
@@ -37,6 +38,7 @@ export function SongDetailsDialog({
   selectedSongsForChart,
   toggleSongSelection,
   songMetadata,
+  allSongs,
   updateSongThemes,
   onSaveSong,
   onDeleteSong,
@@ -143,6 +145,35 @@ export function SongDetailsDialog({
   const partsToRender =
     !isEditingLyrics && viewingSong?.parts && viewingSong.parts.length > 0
       ? viewingSong.parts
+      : [];
+
+  const relatedSongs =
+    viewingSong?.themes && viewingSong.themes.length > 0
+      ? [...allSongs]
+          .filter(
+            (song) =>
+              song.title !== viewingSong.title &&
+              song.themes?.some((theme) => viewingSong.themes?.includes(theme)),
+          )
+          .map((song) => {
+            const sharedThemes =
+              song.themes?.filter((theme) => viewingSong.themes?.includes(theme)) || [];
+
+            return {
+              song,
+              sharedThemes,
+            };
+          })
+          .sort((a, b) => {
+            if (b.sharedThemes.length !== a.sharedThemes.length) {
+              return b.sharedThemes.length - a.sharedThemes.length;
+            }
+            if (b.song.count !== a.song.count) {
+              return b.song.count - a.song.count;
+            }
+            return b.song.lastUsed.getTime() - a.song.lastUsed.getTime();
+          })
+          .slice(0, 3)
       : [];
 
   return (
@@ -336,6 +367,35 @@ export function SongDetailsDialog({
                   {selectedSongsForChart.includes(viewingSong.title) ? 'Remove from Chart' : 'Add to Chart'}
                 </Button>
               </div>
+
+              {relatedSongs.length > 0 && (
+                <div className="border-t pt-4">
+                  <div className="mb-2 text-xs font-medium uppercase tracking-[0.18em] text-slate-400">
+                    Related Songs
+                  </div>
+                  <div className="flex flex-col gap-2">
+                    {relatedSongs.map(({ song, sharedThemes }) => (
+                      <button
+                        key={song.title}
+                        type="button"
+                        onClick={() => setViewingSong(song)}
+                        className="flex items-center justify-between rounded-md border border-slate-200 bg-slate-50/70 px-3 py-2 text-left transition-colors hover:border-slate-300 hover:bg-slate-100"
+                      >
+                        <div className="min-w-0">
+                          <div className="truncate text-sm text-slate-700">{song.title}</div>
+                          <div className="mt-1 text-xs text-slate-500">
+                            {sharedThemes.slice(0, 2).join(', ')}
+                            {sharedThemes.length > 2 ? ` +${sharedThemes.length - 2}` : ''}
+                          </div>
+                        </div>
+                        <div className="ml-4 shrink-0 text-xs text-slate-400">
+                          {song.count > 0 ? format(song.lastUsed, 'MMM d, yy') : 'Never'}
+                        </div>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
             </div>
           )}
         </DialogContent>

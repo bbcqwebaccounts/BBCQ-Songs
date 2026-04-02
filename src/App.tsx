@@ -918,6 +918,7 @@ export default function App() {
           selectedSongsForChart={selectedSongsForChart}
           toggleSongSelection={toggleSongSelection}
           songMetadata={songMetadata}
+          allSongs={stats.allSongs}
           updateSongThemes={updateSongThemes}
           onSaveSong={handleSaveSong}
           onDeleteSong={handleDeleteSong}

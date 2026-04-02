@@ -35,6 +35,24 @@ export function useConsolidation({
   }[]>([]);
   const [consolidationFilter, setConsolidationFilter] = useState<'unmatched' | 'auto' | 'exact' | 'manual' | 'new' | 'all'>('unmatched');
 
+  const stripUndefinedValues = (value: any): any => {
+    if (Array.isArray(value)) {
+      return value
+        .filter((item) => item !== undefined)
+        .map((item) => stripUndefinedValues(item));
+    }
+
+    if (value && typeof value === 'object') {
+      return Object.fromEntries(
+        Object.entries(value)
+          .filter(([, entryValue]) => entryValue !== undefined)
+          .map(([key, entryValue]) => [key, stripUndefinedValues(entryValue)]),
+      );
+    }
+
+    return value;
+  };
+
   const startConsolidation = useCallback(() => {
     if (masterSongs.length === 0) {
       toast.error('Upload the SQLite song database first so consolidation has a source of truth.');
@@ -104,11 +122,11 @@ export function useConsolidation({
     consolidationTasks.forEach(task => {
       if (task.status === 'new') {
         // Add as new song
-        const newSong = {
+        const newSong = stripUndefinedValues({
           title: task.originalTitle,
           lyrics: songMetadata[task.originalTitle]?.lyrics || '',
           themes: songMetadata[task.originalTitle]?.themes || []
-        };
+        });
         const safeId = task.originalTitle.replace(/\//g, '_');
         const songRef = doc(db, 'songs', safeId);
         batch.set(songRef, newSong, { merge: true });
@@ -134,7 +152,7 @@ export function useConsolidation({
         
         const safeMatchedId = matchedTitle.replace(/\//g, '_');
         const matchedRef = doc(db, 'songs', safeMatchedId);
-        batch.set(matchedRef, mergedMetadata, { merge: true });
+        batch.set(matchedRef, stripUndefinedValues(mergedMetadata), { merge: true });
         
         // Delete old metadata
         const safeOldId = oldTitle.replace(/\//g, '_');
