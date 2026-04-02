@@ -5,6 +5,7 @@ import { db } from '../firebase';
 import { doc, writeBatch, deleteDoc } from 'firebase/firestore';
 import { handleFirestoreError, OperationType } from '../firebase';
 import { toast } from 'sonner';
+import { sanitizeSongForFirestore } from '../lib/firebaseData';
 
 interface UseConsolidationProps {
   masterSongs: any[];
@@ -122,11 +123,11 @@ export function useConsolidation({
     consolidationTasks.forEach(task => {
       if (task.status === 'new') {
         // Add as new song
-        const newSong = stripUndefinedValues({
+        const newSong = sanitizeSongForFirestore(stripUndefinedValues({
           title: task.originalTitle,
           lyrics: songMetadata[task.originalTitle]?.lyrics || '',
           themes: songMetadata[task.originalTitle]?.themes || []
-        });
+        }));
         const safeId = task.originalTitle.replace(/\//g, '_');
         const songRef = doc(db, 'songs', safeId);
         batch.set(songRef, newSong, { merge: true });
@@ -152,7 +153,7 @@ export function useConsolidation({
         
         const safeMatchedId = matchedTitle.replace(/\//g, '_');
         const matchedRef = doc(db, 'songs', safeMatchedId);
-        batch.set(matchedRef, stripUndefinedValues(mergedMetadata), { merge: true });
+        batch.set(matchedRef, sanitizeSongForFirestore(stripUndefinedValues(mergedMetadata)), { merge: true });
         
         // Delete old metadata
         const safeOldId = oldTitle.replace(/\//g, '_');

@@ -9,6 +9,7 @@ import { doc, writeBatch, collection } from 'firebase/firestore';
 import {
   getFirebaseActionMessage,
   replaceFirebaseBackupData,
+  sanitizeSongForFirestore,
 } from '../lib/firebaseData';
 import { generateJsonWithFallback } from '../lib/aiClient';
 
@@ -86,7 +87,7 @@ export const useFileHandler = ({
               songs.forEach(song => {
                 const safeId = song.title.replace(/\//g, '_');
                 const songRef = doc(db, 'songs', safeId);
-                batch.set(songRef, song, { merge: true });
+                batch.set(songRef, sanitizeSongForFirestore(song), { merge: true });
               });
               try {
                 await batch.commit();
@@ -154,7 +155,7 @@ export const useFileHandler = ({
             for (const [title, meta] of Object.entries(data.songMetadata)) {
               const safeId = title.replace(/\//g, '_');
               const songRef = doc(db, 'songs', safeId);
-              batch.set(songRef, { title, ...(meta as any) }, { merge: true });
+              batch.set(songRef, sanitizeSongForFirestore({ title, ...(meta as any) }), { merge: true });
               count++;
               if (count >= 400) await commitBatch();
             }
@@ -163,7 +164,7 @@ export const useFileHandler = ({
               for (const song of data.masterSongs) {
                 const safeId = song.title.replace(/\//g, '_');
                 const songRef = doc(db, 'songs', safeId);
-                batch.set(songRef, song, { merge: true });
+                batch.set(songRef, sanitizeSongForFirestore(song), { merge: true });
                 count++;
                 if (count >= 400) await commitBatch();
               }
@@ -251,7 +252,7 @@ export const useFileHandler = ({
     Object.entries(newMetadata).forEach(([title, meta]) => {
       const safeId = title.replace(/\//g, '_');
       const songRef = doc(db, 'songs', safeId);
-      batch.set(songRef, { title, ...meta }, { merge: true });
+      batch.set(songRef, sanitizeSongForFirestore({ title, ...meta }), { merge: true });
     });
 
     const existingKeys = new Set(services.map(s => `${s.date.getTime()}-${s.serviceType}`));

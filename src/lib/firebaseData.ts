@@ -27,6 +27,82 @@ export interface NormalizedBackupData {
 
 export const getSongDocId = (title: string) => title.replace(/\//g, '_');
 
+function deepStripNil(value: any): any {
+  if (Array.isArray(value)) {
+    return value
+      .filter((item) => item !== undefined && item !== null)
+      .map((item) => deepStripNil(item));
+  }
+
+  if (value && typeof value === 'object') {
+    return Object.fromEntries(
+      Object.entries(value)
+        .filter(([, entryValue]) => entryValue !== undefined && entryValue !== null)
+        .map(([key, entryValue]) => [key, deepStripNil(entryValue)]),
+    );
+  }
+
+  return value;
+}
+
+export function sanitizeSongForFirestore(song: Record<string, any>) {
+  const cleaned: Record<string, any> = {
+    title: song.title,
+  };
+
+  const stringFields = [
+    'alternate_title',
+    'lyrics',
+    'author',
+    'verse_order',
+    'copyright',
+  ];
+
+  for (const field of stringFields) {
+    if (typeof song[field] === 'string' && song[field].trim().length > 0) {
+      cleaned[field] = song[field];
+    }
+  }
+
+  if (song.ccli_number !== undefined && song.ccli_number !== null && String(song.ccli_number).trim()) {
+    cleaned.ccli_number = String(song.ccli_number);
+  }
+
+  if (Array.isArray(song.themes) && song.themes.length > 0) {
+    cleaned.themes = song.themes.filter((theme) => typeof theme === 'string' && theme.trim().length > 0);
+  }
+
+  if (Array.isArray(song.parts) && song.parts.length > 0) {
+    cleaned.parts = song.parts
+      .map((part) =>
+        deepStripNil({
+          type: part?.type,
+          label: part?.label,
+          text: part?.text,
+        }),
+      )
+      .filter(
+        (part) =>
+          typeof part.type === 'string' &&
+          typeof part.label === 'string' &&
+          typeof part.text === 'string',
+      );
+  }
+
+  if (Array.isArray(song.embedding) && song.embedding.length > 0) {
+    cleaned.embedding = song.embedding;
+  }
+
+  if (
+    typeof song.embeddingProvider === 'string' &&
+    song.embeddingProvider.trim().length > 0
+  ) {
+    cleaned.embeddingProvider = song.embeddingProvider;
+  }
+
+  return deepStripNil(cleaned);
+}
+
 export function getFirebaseActionMessage(error: unknown, fallback: string) {
   const code =
     typeof error === 'object' && error && 'code' in error
@@ -313,7 +389,7 @@ async function writeSongsToFirestore(
   let count = 0;
 
   for (const song of songs) {
-    batch.set(doc(db, 'songs', getSongDocId(song.title)), song);
+    batch.set(doc(db, 'songs', getSongDocId(song.title)), sanitizeSongForFirestore(song));
     count += 1;
 
     if (count >= 400) {

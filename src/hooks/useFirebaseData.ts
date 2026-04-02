@@ -4,6 +4,7 @@ import { db, auth, handleFirestoreError, OperationType } from '../firebase';
 import { ServiceData, SongMeta } from '../types';
 import localforage from 'localforage';
 import defaultData from '../defaultData.json';
+import { sanitizeSongForFirestore } from '../lib/firebaseData';
 
 interface UseFirebaseDataProps {
   setServices: (services: ServiceData[]) => void;
@@ -194,8 +195,13 @@ export function useFirebaseData({
         if (masterSong.ccli_number) songData.ccli_number = masterSong.ccli_number;
         if (meta.themes && meta.themes.length > 0) songData.themes = meta.themes;
         if (meta.embedding) songData.embedding = meta.embedding;
+        if (meta.embeddingProvider) songData.embeddingProvider = meta.embeddingProvider;
+        if (masterSong.parts || meta.parts) songData.parts = masterSong.parts || meta.parts;
+        if (masterSong.verse_order || meta.verse_order) {
+          songData.verse_order = masterSong.verse_order || meta.verse_order;
+        }
 
-        batch.set(songRef, songData);
+        batch.set(songRef, sanitizeSongForFirestore(songData));
         count++;
         if (count === 400) {
           await batch.commit();
