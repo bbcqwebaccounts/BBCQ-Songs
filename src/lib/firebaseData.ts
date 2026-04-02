@@ -26,6 +26,16 @@ export interface NormalizedBackupData {
 }
 
 export const getSongDocId = (title: string) => title.replace(/\//g, '_');
+export const getServiceIdentityKey = (
+  date: Date | string,
+  serviceType: string,
+) => {
+  const normalizedDate =
+    date instanceof Date
+      ? date.toISOString().split('T')[0]
+      : new Date(date).toISOString().split('T')[0];
+  return `${normalizedDate}-${serviceType}`;
+};
 
 function deepStripNil(value: any): any {
   if (Array.isArray(value)) {
@@ -159,6 +169,99 @@ export async function replaceFirebaseBackupData(raw: unknown) {
   return {
     servicesCount: data.services.length,
     songsCount: buildUnifiedSongRecords(data.songMetadata, data.masterSongs).length,
+  };
+}
+
+export async function deduplicateServicesInFirebase() {
+  const servicesSnapshot = await getDocs(collection(db, 'services'));
+  const grouped = new Map<
+    string,
+    {
+      keeperId: string;
+      date: string;
+      serviceType: 'AM' | 'PM';
+      fileName: string;
+      songs: Set<string>;
+      duplicateIds: string[];
+    }
+  >();
+
+  servicesSnapshot.forEach((serviceDoc) => {
+    const data = serviceDoc.data();
+    const serviceDate = typeof data.date === 'string'
+      ? data.date
+      : new Date(data.date).toISOString().split('T')[0];
+    const serviceType = data.serviceType === 'PM' ? 'PM' : 'AM';
+    const songs = Array.isArray(data.songs) ? data.songs : [];
+    const key = getServiceIdentityKey(serviceDate, serviceType);
+
+    if (!grouped.has(key)) {
+      grouped.set(key, {
+        keeperId: serviceDoc.id,
+        date: serviceDate,
+        serviceType,
+        fileName: data.fileName || '',
+        songs: new Set(songs),
+        duplicateIds: [],
+      });
+      return;
+    }
+
+    const existing = grouped.get(key)!;
+    songs.forEach((song: string) => existing.songs.add(song));
+    if (!existing.fileName && data.fileName) {
+      existing.fileName = data.fileName;
+    }
+    existing.duplicateIds.push(serviceDoc.id);
+  });
+
+  let mergedServices = 0;
+  let removedServices = 0;
+  let batch = writeBatch(db);
+  let count = 0;
+
+  const commitIfNeeded = async () => {
+    if (count >= 400) {
+      await batch.commit();
+      batch = writeBatch(db);
+      count = 0;
+    }
+  };
+
+  for (const service of grouped.values()) {
+    if (service.duplicateIds.length === 0) {
+      continue;
+    }
+
+    batch.set(
+      doc(db, 'services', service.keeperId),
+      {
+        date: service.date,
+        fileName: service.fileName,
+        serviceType: service.serviceType,
+        songs: Array.from(service.songs),
+      },
+      { merge: true },
+    );
+    count += 1;
+    mergedServices += 1;
+    await commitIfNeeded();
+
+    for (const duplicateId of service.duplicateIds) {
+      batch.delete(doc(db, 'services', duplicateId));
+      count += 1;
+      removedServices += 1;
+      await commitIfNeeded();
+    }
+  }
+
+  if (count > 0) {
+    await batch.commit();
+  }
+
+  return {
+    mergedServices,
+    removedServices,
   };
 }
 

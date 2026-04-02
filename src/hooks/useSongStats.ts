@@ -1,6 +1,7 @@
 import { useMemo } from 'react';
 import { format, eachMonthOfInterval, startOfMonth, endOfMonth, isSameMonth, eachWeekOfInterval, startOfWeek, endOfWeek, isSameWeek, eachYearOfInterval, startOfYear, endOfYear, isSameYear } from 'date-fns';
 import { ServiceData, SongMeta, SongUsage } from '../types';
+import { getServiceIdentityKey } from '../lib/firebaseData';
 
 interface UseSongStatsProps {
   services: ServiceData[];
@@ -19,6 +20,8 @@ export function useSongStats({
 }: UseSongStatsProps) {
   return useMemo(() => {
     const songMap = new Map<string, SongUsage>();
+    const uniqueServiceKeys = new Set<string>();
+    const seenSongUsageKeys = new Set<string>();
     let earliestDate = new Date();
     let latestDate = new Date(0);
     
@@ -42,10 +45,17 @@ export function useSongStats({
     });
 
     services.forEach(service => {
+      uniqueServiceKeys.add(getServiceIdentityKey(service.date, service.serviceType));
       if (service.date < earliestDate) earliestDate = service.date;
       if (service.date > latestDate) latestDate = service.date;
 
       service.songs.forEach(songTitle => {
+        const usageKey = `${songTitle}::${getServiceIdentityKey(service.date, service.serviceType)}`;
+        if (seenSongUsageKeys.has(usageKey)) {
+          return;
+        }
+        seenSongUsageKeys.add(usageKey);
+
         const existing = songMap.get(songTitle);
         if (existing) {
           existing.count += 1;
@@ -126,7 +136,7 @@ export function useSongStats({
     }
 
     return {
-      totalServices: services.length,
+      totalServices: uniqueServiceKeys.size,
       totalUniqueSongs: allSongs.length,
       allSongs,
       timeline,

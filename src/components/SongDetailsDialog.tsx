@@ -10,7 +10,7 @@ import { Badge } from '@/components/ui/badge';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Calendar, Loader2, Music, Plus, Save, Trash2, X } from 'lucide-react';
+import { Calendar, GitMerge, Loader2, Music, Plus, Save, Trash2, X } from 'lucide-react';
 import { format } from 'date-fns';
 import { SongUsage, SongMeta } from '../types';
 import { ConfirmDialog } from './ConfirmDialog';
@@ -29,6 +29,7 @@ interface SongDetailsDialogProps {
     updates: { title: string; lyrics: string },
   ) => Promise<{ title: string; lyrics: string } | null>;
   onDeleteSong: (title: string) => Promise<void>;
+  onOpenConsolidation: (title: string) => void;
   isAdmin: boolean;
 }
 
@@ -42,6 +43,7 @@ export function SongDetailsDialog({
   updateSongThemes,
   onSaveSong,
   onDeleteSong,
+  onOpenConsolidation,
   isAdmin,
 }: SongDetailsDialogProps) {
   const [newTheme, setNewTheme] = useState('');
@@ -262,18 +264,28 @@ export function SongDetailsDialog({
                       </p>
                     )}
                     <div className="flex flex-wrap items-center justify-between gap-3">
-                      <Button
-                        onClick={handleSave}
-                        disabled={!hasChanges || isSaving}
-                        className="bg-indigo-600 hover:bg-indigo-700"
-                      >
-                        {isSaving ? (
-                          <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                        ) : (
-                          <Save className="h-4 w-4 mr-2" />
-                        )}
-                        Save Changes
-                      </Button>
+                      <div className="flex flex-wrap items-center gap-3">
+                        <Button
+                          onClick={handleSave}
+                          disabled={!hasChanges || isSaving}
+                          className="bg-indigo-600 hover:bg-indigo-700"
+                        >
+                          {isSaving ? (
+                            <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                          ) : (
+                            <Save className="h-4 w-4 mr-2" />
+                          )}
+                          Save Changes
+                        </Button>
+                        <Button
+                          type="button"
+                          variant="outline"
+                          onClick={() => onOpenConsolidation(viewingSong.title)}
+                        >
+                          <GitMerge className="h-4 w-4 mr-2" />
+                          Consolidate To...
+                        </Button>
+                      </div>
                       <Button
                         variant="destructive"
                         onClick={() => setIsConfirmDeleteOpen(true)}

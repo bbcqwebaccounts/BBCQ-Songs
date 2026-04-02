@@ -33,6 +33,7 @@ import { useDragAndDrop } from './hooks/useDragAndDrop';
 import { useFirebaseData } from './hooks/useFirebaseData';
 import { auth, signInWithGoogle, logOut } from './firebase';
 import {
+  deduplicateServicesInFirebase,
   deleteSongEverywhere,
   getFirebaseActionMessage,
   updateSongDetailsInFirebase,
@@ -114,6 +115,8 @@ export default function App() {
     setConsolidationTasks,
     consolidationFilter,
     setConsolidationFilter,
+    focusedSongTitle,
+    setFocusedSongTitle,
     startConsolidation,
     applyConsolidation
   } = useConsolidation({
@@ -188,6 +191,28 @@ export default function App() {
     } catch (e) {
       console.error('Failed to clear Firebase data.', e);
       toast.error(getFirebaseActionMessage(e, 'Failed to clear Firebase data.'));
+    }
+  };
+
+  const handleDeduplicateServices = async () => {
+    if (!isAdmin) {
+      toast.error('Admin access is required to deduplicate services.');
+      return;
+    }
+
+    try {
+      const result = await deduplicateServicesInFirebase();
+      if (result.removedServices === 0) {
+        toast.success('No duplicate services were found.');
+        return;
+      }
+
+      toast.success(
+        `Merged ${result.mergedServices} duplicated service groups and removed ${result.removedServices} duplicate entries.`,
+      );
+    } catch (error) {
+      console.error('Failed to deduplicate services.', error);
+      toast.error(getFirebaseActionMessage(error, 'Failed to deduplicate services.'));
     }
   };
 
@@ -756,20 +781,32 @@ export default function App() {
                     <CardDescription>Click a column header to sort. Click a song for details.</CardDescription>
                   </div>
                   <div className="flex flex-col sm:flex-row items-start sm:items-center gap-4 w-full sm:w-auto">
-                    <Button 
-                      variant="outline" 
-                      className="w-full sm:w-auto border-slate-200 text-slate-700 hover:bg-slate-50"
-                      onClick={() => {
-                        if (!isAdmin) {
-                          toast.error('Admin access is required to consolidate songs.');
-                          return;
-                        }
-                        startConsolidation();
-                      }}
-                      disabled={masterSongs.length === 0}
-                    >
-                      Consolidate
-                    </Button>
+                    <div className="flex w-full sm:w-auto items-center gap-2">
+                      <Button 
+                        variant="outline" 
+                        className="w-full sm:w-auto border-slate-200 text-slate-700 hover:bg-slate-50"
+                        onClick={() => {
+                          if (!isAdmin) {
+                            toast.error('Admin access is required to consolidate songs.');
+                            return;
+                          }
+                          startConsolidation();
+                        }}
+                        disabled={masterSongs.length === 0}
+                      >
+                        Consolidate
+                      </Button>
+                      {selectedSongsForChart.length > 0 && (
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => setSelectedSongsForChart([])}
+                          className="h-9 whitespace-nowrap text-slate-500 hover:text-slate-900"
+                        >
+                          Deselect All
+                        </Button>
+                      )}
+                    </div>
                     <div className="relative w-full sm:w-72 flex flex-col gap-2">
                       <div className="flex gap-2">
                         <div className="relative flex-1">
@@ -903,12 +940,18 @@ export default function App() {
         {/* Consolidate Dialog */}
         <ConsolidateDialog
           isOpen={isConsolidateDialogOpen}
-          onOpenChange={setIsConsolidateDialogOpen}
+          onOpenChange={(open) => {
+            setIsConsolidateDialogOpen(open);
+            if (!open) {
+              setFocusedSongTitle(null);
+            }
+          }}
           consolidationTasks={consolidationTasks}
           setConsolidationTasks={setConsolidationTasks}
           songMetadata={songMetadata}
           masterSongs={masterSongs}
           applyConsolidation={applyConsolidation}
+          initialFocusTitle={focusedSongTitle}
         />
 
         {/* Song Details Modal */}
@@ -922,6 +965,10 @@ export default function App() {
           updateSongThemes={updateSongThemes}
           onSaveSong={handleSaveSong}
           onDeleteSong={handleDeleteSong}
+          onOpenConsolidation={(title) => {
+            setViewingSong(null);
+            startConsolidation(title);
+          }}
           isAdmin={isAdmin}
         />
 
@@ -941,6 +988,7 @@ export default function App() {
           updateSongThemes={updateSongThemes}
           exportData={exportData}
           clearData={clearData}
+          deduplicateServices={handleDeduplicateServices}
           hasData={services.length > 0 || masterSongs.length > 0}
           isAdmin={isAdmin}
           currentUserEmail={userEmail || auth.currentUser?.email || null}

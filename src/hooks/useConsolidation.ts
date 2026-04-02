@@ -35,6 +35,7 @@ export function useConsolidation({
     status: 'exact' | 'auto' | 'manual' | 'unmatched' | 'new';
   }[]>([]);
   const [consolidationFilter, setConsolidationFilter] = useState<'unmatched' | 'auto' | 'exact' | 'manual' | 'new' | 'all'>('unmatched');
+  const [focusedSongTitle, setFocusedSongTitle] = useState<string | null>(null);
 
   const stripUndefinedValues = (value: any): any => {
     if (Array.isArray(value)) {
@@ -54,10 +55,10 @@ export function useConsolidation({
     return value;
   };
 
-  const startConsolidation = useCallback(() => {
+  const buildConsolidationTasks = useCallback(() => {
     if (masterSongs.length === 0) {
       toast.error('Upload the SQLite song database first so consolidation has a source of truth.');
-      return;
+      return null;
     }
 
     const uniqueServiceSongs = new Set<string>();
@@ -97,22 +98,33 @@ export function useConsolidation({
     });
 
     setConsolidationTasks(tasks);
-    setConsolidationFilter('unmatched');
-    
-    // Only open dialog if there are unmatched or auto-matched songs
-    if (tasks.some(t => t.status === 'unmatched' || t.status === 'auto')) {
-      setIsConsolidateDialogOpen(true);
-    } else {
-      toast.success('No consolidation work is needed right now.');
-    }
+    return tasks;
   }, [masterSongs, services, songMetadata]);
+
+  const startConsolidation = useCallback((focusTitle?: string | null) => {
+    const tasks = buildConsolidationTasks();
+    if (!tasks) return;
+
+    setFocusedSongTitle(focusTitle || null);
+    setConsolidationFilter(focusTitle ? 'all' : 'unmatched');
+    setIsConsolidateDialogOpen(true);
+
+    if (!focusTitle && !tasks.some(t => t.status === 'unmatched' || t.status === 'auto')) {
+      toast.success('No consolidation work is needed right now, but you can still review or merge songs manually.');
+    }
+  }, [buildConsolidationTasks]);
 
   useEffect(() => {
     if (pendingConsolidationCheck && services.length > 0 && masterSongs.length > 0) {
-      startConsolidation();
+      const tasks = buildConsolidationTasks();
+      if (tasks && tasks.some(t => t.status === 'unmatched' || t.status === 'auto')) {
+        setFocusedSongTitle(null);
+        setConsolidationFilter('unmatched');
+        setIsConsolidateDialogOpen(true);
+      }
       setPendingConsolidationCheck(false);
     }
-  }, [pendingConsolidationCheck, services, masterSongs, startConsolidation, setPendingConsolidationCheck]);
+  }, [pendingConsolidationCheck, services, masterSongs, buildConsolidationTasks, setPendingConsolidationCheck]);
 
   const applyConsolidation = async () => {
     let mergedCount = 0;
@@ -196,6 +208,8 @@ export function useConsolidation({
     setConsolidationTasks,
     consolidationFilter,
     setConsolidationFilter,
+    focusedSongTitle,
+    setFocusedSongTitle,
     startConsolidation,
     applyConsolidation
   };

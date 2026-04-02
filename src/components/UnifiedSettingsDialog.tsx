@@ -26,6 +26,7 @@ interface UnifiedSettingsDialogProps {
   // Data Management
   exportData: () => void;
   clearData: () => void;
+  deduplicateServices: () => void;
   hasData: boolean;
   isAdmin: boolean;
   currentUserEmail: string | null;
@@ -53,6 +54,7 @@ export function UnifiedSettingsDialog({
   updateSongThemes,
   exportData,
   clearData,
+  deduplicateServices,
   hasData,
   isAdmin,
   currentUserEmail,
@@ -256,6 +258,24 @@ export function UnifiedSettingsDialog({
                 <p className="text-xs text-slate-500">
                   Use this for the attached backup export. The import on this screen is destructive by design.
                 </p>
+              </div>
+
+              <div className="bg-white border rounded-lg p-6 space-y-4 shadow-sm">
+                <div>
+                  <h3 className="text-lg font-medium text-slate-900">Repair Duplicate Services</h3>
+                  <p className="text-sm text-slate-500 mt-1">
+                    Detect duplicate service entries with the same date and AM/PM value, merge their songs, and remove the extras.
+                  </p>
+                </div>
+                <Button
+                  variant="outline"
+                  onClick={deduplicateServices}
+                  disabled={!hasData}
+                  className="w-full sm:w-auto text-indigo-600 hover:text-indigo-700 hover:bg-indigo-50 border-indigo-200"
+                >
+                  <Database className="h-4 w-4 mr-2" />
+                  Deduplicate Services
+                </Button>
               </div>
 
               <div className="bg-white border rounded-lg p-6 space-y-4 shadow-sm">

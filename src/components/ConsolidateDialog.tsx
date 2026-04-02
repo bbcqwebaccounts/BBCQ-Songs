@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -23,6 +23,7 @@ interface ConsolidateDialogProps {
   songMetadata: Record<string, { lyrics?: string; themes?: string[] }>;
   masterSongs: any[];
   applyConsolidation: () => void;
+  initialFocusTitle?: string | null;
 }
 
 export function ConsolidateDialog({
@@ -32,12 +33,26 @@ export function ConsolidateDialog({
   setConsolidationTasks,
   songMetadata,
   masterSongs,
-  applyConsolidation
+  applyConsolidation,
+  initialFocusTitle
 }: ConsolidateDialogProps) {
   const [consolidationFilter, setConsolidationFilter] = useState<'all' | 'unmatched' | 'auto' | 'exact' | 'manual' | 'new'>('all');
   const [activeSearch, setActiveSearch] = useState<string | null>(null);
   const [masterSearchTerm, setMasterSearchTerm] = useState('');
   const [taskToAddNew, setTaskToAddNew] = useState<ConsolidationTask | null>(null);
+
+  useEffect(() => {
+    if (!isOpen) return;
+
+    if (initialFocusTitle) {
+      setConsolidationFilter('all');
+      setActiveSearch(initialFocusTitle);
+      setMasterSearchTerm(initialFocusTitle);
+    } else {
+      setActiveSearch(null);
+      setMasterSearchTerm('');
+    }
+  }, [isOpen, initialFocusTitle]);
 
   const confirmAddNew = () => {
     if (!taskToAddNew) return;
@@ -112,7 +127,7 @@ export function ConsolidateDialog({
               {consolidationTasks
                 .filter(t => consolidationFilter === 'all' || t.status === consolidationFilter)
                 .map((task, index) => (
-                <div key={index} className="p-4 border rounded-lg bg-slate-50">
+                <div key={index} className={`p-4 border rounded-lg ${initialFocusTitle === task.originalTitle ? 'bg-indigo-50 border-indigo-200' : 'bg-slate-50'}`}>
                   <div className="flex justify-between items-start mb-2">
                     <div className="flex-1 min-w-0 pr-4">
                       <h4 className="font-semibold text-slate-900 text-base">{task.originalTitle}</h4>

@@ -8,6 +8,7 @@ import { db, handleFirestoreError, OperationType } from '../firebase';
 import { doc, writeBatch, collection } from 'firebase/firestore';
 import {
   getFirebaseActionMessage,
+  getServiceIdentityKey,
   replaceFirebaseBackupData,
   sanitizeSongForFirestore,
 } from '../lib/firebaseData';
@@ -171,8 +172,13 @@ export const useFileHandler = ({
             }
           }
           
-          const existingKeys = new Set(services.map(s => `${s.date.getTime()}-${s.serviceType}`));
-          const uniqueNew = parsedServices.filter((s: any) => !existingKeys.has(`${s.date.getTime()}-${s.serviceType}`));
+          const existingKeys = new Set(
+            services.map((service) => getServiceIdentityKey(service.date, service.serviceType)),
+          );
+          const uniqueNew = parsedServices.filter(
+            (service: any) =>
+              !existingKeys.has(getServiceIdentityKey(service.date, service.serviceType)),
+          );
           
           for (const service of uniqueNew) {
             const serviceRef = doc(collection(db, 'services'));
@@ -255,8 +261,13 @@ export const useFileHandler = ({
       batch.set(songRef, sanitizeSongForFirestore({ title, ...meta }), { merge: true });
     });
 
-    const existingKeys = new Set(services.map(s => `${s.date.getTime()}-${s.serviceType}`));
-    const uniqueNew = newServices.filter((s: any) => !existingKeys.has(`${s.date.getTime()}-${s.serviceType}`));
+    const existingKeys = new Set(
+      services.map((service) => getServiceIdentityKey(service.date, service.serviceType)),
+    );
+    const uniqueNew = newServices.filter(
+      (service: any) =>
+        !existingKeys.has(getServiceIdentityKey(service.date, service.serviceType)),
+    );
     
     uniqueNew.forEach(service => {
       const serviceRef = doc(collection(db, 'services'));
