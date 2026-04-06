@@ -2,6 +2,7 @@ import { useMemo } from 'react';
 import { format, eachMonthOfInterval, startOfMonth, endOfMonth, isSameMonth, eachWeekOfInterval, startOfWeek, endOfWeek, isSameWeek, eachYearOfInterval, startOfYear, endOfYear, isSameYear } from 'date-fns';
 import { ServiceData, SongMeta, SongUsage } from '../types';
 import { getServiceIdentityKey } from '../lib/firebaseData';
+import { extractDateFromFilename } from '../lib/songUtils';
 
 interface UseSongStatsProps {
   services: ServiceData[];
@@ -45,12 +46,14 @@ export function useSongStats({
     });
 
     services.forEach(service => {
-      uniqueServiceKeys.add(getServiceIdentityKey(service.date, service.serviceType));
-      if (service.date < earliestDate) earliestDate = service.date;
-      if (service.date > latestDate) latestDate = service.date;
+      const canonicalDate = extractDateFromFilename(service.fileName, service.date);
+
+      uniqueServiceKeys.add(getServiceIdentityKey(canonicalDate, service.serviceType));
+      if (canonicalDate < earliestDate) earliestDate = canonicalDate;
+      if (canonicalDate > latestDate) latestDate = canonicalDate;
 
       service.songs.forEach(songTitle => {
-        const usageKey = `${songTitle}::${getServiceIdentityKey(service.date, service.serviceType)}`;
+        const usageKey = `${songTitle}::${getServiceIdentityKey(canonicalDate, service.serviceType)}`;
         if (seenSongUsageKeys.has(usageKey)) {
           return;
         }
@@ -61,18 +64,18 @@ export function useSongStats({
           existing.count += 1;
           if (service.serviceType === 'AM') existing.amCount += 1;
           if (service.serviceType === 'PM') existing.pmCount += 1;
-          existing.datesUsed.push({ date: service.date, type: service.serviceType });
-          if (existing.lastUsed.getTime() === 0 || service.date > existing.lastUsed) existing.lastUsed = service.date;
-          if (existing.firstUsed > new Date() || service.date < existing.firstUsed) existing.firstUsed = service.date;
+          existing.datesUsed.push({ date: canonicalDate, type: service.serviceType });
+          if (existing.lastUsed.getTime() === 0 || canonicalDate > existing.lastUsed) existing.lastUsed = canonicalDate;
+          if (existing.firstUsed > new Date() || canonicalDate < existing.firstUsed) existing.firstUsed = canonicalDate;
         } else {
           songMap.set(songTitle, {
             title: songTitle,
             count: 1,
             amCount: service.serviceType === 'AM' ? 1 : 0,
             pmCount: service.serviceType === 'PM' ? 1 : 0,
-            lastUsed: service.date,
-            firstUsed: service.date,
-            datesUsed: [{ date: service.date, type: service.serviceType }],
+            lastUsed: canonicalDate,
+            firstUsed: canonicalDate,
+            datesUsed: [{ date: canonicalDate, type: service.serviceType }],
             lyrics: songMetadata[songTitle]?.lyrics,
             themes: songMetadata[songTitle]?.themes,
             parts: songMetadata[songTitle]?.parts,
