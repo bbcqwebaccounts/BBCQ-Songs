@@ -109,6 +109,7 @@ export function useSongFiltering({
   const lookupResults = useMemo(() => {
     if (services.length === 0) return null;
 
+    // Prefer the filename-derived service date because several imports were stored a day early.
     const normalizedServices = services.map((service) => ({
       ...service,
       canonicalDate: extractDateFromFilename(service.fileName, service.date),
