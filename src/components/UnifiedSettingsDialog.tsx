@@ -3,9 +3,10 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } f
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Search, Loader2, Sparkles, Database, CheckCircle2, X, Tags, Cloud, Save, Trash2 } from 'lucide-react';
-import { SongUsage, SongMeta } from '../types';
+import { Search, Loader2, Sparkles, Database, CheckCircle2, X, Tags, Cloud, Save, Trash2, Calendar } from 'lucide-react';
+import { SongUsage, SongMeta, ServiceData } from '../types';
 import { toast } from 'sonner';
+import { format } from 'date-fns';
 
 import { ConfirmDialog } from './ConfirmDialog';
 
@@ -34,6 +35,8 @@ interface UnifiedSettingsDialogProps {
     files: FileList | File[],
     options?: { jsonMode?: 'merge' | 'replace' },
   ) => Promise<void>;
+  services: ServiceData[];
+  updateServiceDate: (serviceId: string, nextDate: string) => Promise<void>;
   servicesCount: number;
   songsCount: number;
   lastSyncTime: Date | null;
@@ -59,12 +62,50 @@ export function UnifiedSettingsDialog({
   isAdmin,
   currentUserEmail,
   handleFiles,
+  services,
+  updateServiceDate,
   servicesCount,
   songsCount,
   lastSyncTime
 }: UnifiedSettingsDialogProps) {
   const [isConfirmClearOpen, setIsConfirmClearOpen] = React.useState(false);
   const [pendingSyncFile, setPendingSyncFile] = React.useState<File | null>(null);
+  const [serviceSearchQuery, setServiceSearchQuery] = React.useState('');
+  const [serviceDraftDates, setServiceDraftDates] = React.useState<Record<string, string>>({});
+  const [savingServiceId, setSavingServiceId] = React.useState<string | null>(null);
+
+  const servicesForEditing = React.useMemo(() => {
+    const query = serviceSearchQuery.trim().toLowerCase();
+
+    return [...services]
+      .sort((a, b) => b.date.getTime() - a.date.getTime() || a.fileName.localeCompare(b.fileName))
+      .filter((service) => {
+        if (!query) return true;
+
+        const searchable = [
+          service.fileName,
+          format(service.date, 'yyyy-MM-dd'),
+          service.serviceType,
+        ]
+          .join(' ')
+          .toLowerCase();
+
+        return searchable.includes(query);
+      })
+      .slice(0, 100);
+  }, [serviceSearchQuery, services]);
+
+  const getServiceDraftDate = React.useCallback(
+    (service: ServiceData) => {
+      const draft = service.id ? serviceDraftDates[service.id] : undefined;
+      return draft ?? format(service.date, 'yyyy-MM-dd');
+    },
+    [serviceDraftDates],
+  );
+
+  const hasDateInFileName = React.useCallback((fileName: string) => {
+    return /(\d{4})[-_.](\d{2})[-_.](\d{2})|(\d{2})[-_.](\d{2})[-_.](\d{4})|(\d{2})[-_.](\d{2})[-_.](\d{2})/.test(fileName);
+  }, []);
 
   return (
     <Dialog open={isOpen} onOpenChange={onOpenChange}>
@@ -276,6 +317,107 @@ export function UnifiedSettingsDialog({
                   <Database className="h-4 w-4 mr-2" />
                   Deduplicate Services
                 </Button>
+              </div>
+
+              <div className="bg-white border rounded-lg p-6 space-y-4 shadow-sm">
+                <div>
+                  <h3 className="text-lg font-medium text-slate-900">Edit Service Dates</h3>
+                  <p className="text-sm text-slate-500 mt-1">
+                    Correct stored service dates when a file was imported with the wrong day. Files without a date in the filename are especially likely to have used the file modified date instead.
+                  </p>
+                </div>
+                <div className="flex items-center gap-2">
+                  <Search className="h-4 w-4 text-slate-400" />
+                  <Input
+                    placeholder="Search by filename, date, or AM/PM..."
+                    value={serviceSearchQuery}
+                    onChange={(e) => setServiceSearchQuery(e.target.value)}
+                  />
+                </div>
+                <div className="border rounded-md overflow-hidden">
+                  <div className="max-h-96 overflow-auto divide-y">
+                    {servicesForEditing.length === 0 ? (
+                      <div className="p-4 text-sm text-slate-500">
+                        No matching services found.
+                      </div>
+                    ) : (
+                      servicesForEditing.map((service) => {
+                        const serviceKey = service.id || `${service.fileName}-${service.serviceType}-${service.date.toISOString()}`;
+                        const draftDate = getServiceDraftDate(service);
+                        const unchanged = draftDate === format(service.date, 'yyyy-MM-dd');
+
+                        return (
+                          <div key={serviceKey} className="p-4 space-y-3">
+                            <div className="flex flex-col gap-1">
+                              <div className="flex flex-wrap items-center gap-2">
+                                <span className="font-medium text-slate-900 break-all">{service.fileName || 'Untitled service file'}</span>
+                                <span className="text-xs rounded-full border px-2 py-0.5 text-slate-600">{service.serviceType}</span>
+                                {!hasDateInFileName(service.fileName) && (
+                                  <span className="text-xs rounded-full border border-amber-200 bg-amber-50 px-2 py-0.5 text-amber-700">
+                                    No date in filename
+                                  </span>
+                                )}
+                              </div>
+                              <p className="text-xs text-slate-500">
+                                Stored date: {format(service.date, 'EEE, d MMM yyyy')} • {service.songs.length} songs
+                              </p>
+                            </div>
+                            <div className="flex flex-col sm:flex-row gap-2 sm:items-center">
+                              <div className="relative flex-1">
+                                <Calendar className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+                                <Input
+                                  type="date"
+                                  className="pl-9"
+                                  value={draftDate}
+                                  onChange={(e) => {
+                                    if (!service.id) return;
+                                    setServiceDraftDates((prev) => ({
+                                      ...prev,
+                                      [service.id!]: e.target.value,
+                                    }));
+                                  }}
+                                  disabled={!service.id || !isAdmin}
+                                />
+                              </div>
+                              <Button
+                                type="button"
+                                variant="outline"
+                                disabled={!service.id || !isAdmin || unchanged || savingServiceId === service.id}
+                                onClick={async () => {
+                                  if (!service.id) return;
+                                  try {
+                                    setSavingServiceId(service.id);
+                                    await updateServiceDate(service.id, draftDate);
+                                    setServiceDraftDates((prev) => {
+                                      const next = { ...prev };
+                                      delete next[service.id!];
+                                      return next;
+                                    });
+                                    toast.success(`Updated ${service.fileName || 'service'} to ${draftDate}.`);
+                                  } catch (error) {
+                                    toast.error(error instanceof Error ? error.message : 'Failed to update service date.');
+                                  } finally {
+                                    setSavingServiceId((current) => (current === service.id ? null : current));
+                                  }
+                                }}
+                              >
+                                {savingServiceId === service.id ? (
+                                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                                ) : (
+                                  <Save className="h-4 w-4 mr-2" />
+                                )}
+                                Save Date
+                              </Button>
+                            </div>
+                          </div>
+                        );
+                      })
+                    )}
+                  </div>
+                </div>
+                <p className="text-xs text-slate-500">
+                  Showing the 100 most recent matching services. Editing dates requires admin access.
+                </p>
               </div>
 
               <div className="bg-white border rounded-lg p-6 space-y-4 shadow-sm">

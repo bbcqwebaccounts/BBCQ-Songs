@@ -5,6 +5,7 @@ import {
   doc,
   getDoc,
   getDocs,
+  updateDoc,
   writeBatch,
 } from 'firebase/firestore';
 import { db } from '../firebase';
@@ -424,6 +425,28 @@ export async function updateSongDetailsInFirebase({
   return {
     title: trimmedTitle,
     lyrics: normalizedLyrics,
+  };
+}
+
+export async function updateServiceDateInFirebase({
+  serviceId,
+  nextDate,
+}: {
+  serviceId: string;
+  nextDate: string;
+}) {
+  const trimmedDate = nextDate.trim();
+
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(trimmedDate)) {
+    throw new Error('Service date must be in YYYY-MM-DD format.');
+  }
+
+  await updateDoc(doc(db, 'services', serviceId), {
+    date: trimmedDate,
+  });
+
+  return {
+    date: new Date(trimmedDate),
   };
 }
 

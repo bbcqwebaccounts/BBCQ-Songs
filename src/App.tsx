@@ -36,6 +36,7 @@ import {
   deduplicateServicesInFirebase,
   deleteSongEverywhere,
   getFirebaseActionMessage,
+  updateServiceDateInFirebase,
   updateSongDetailsInFirebase,
 } from './lib/firebaseData';
 import { toast } from 'sonner';
@@ -214,6 +215,29 @@ export default function App() {
     } catch (error) {
       console.error('Failed to deduplicate services.', error);
       toast.error(getFirebaseActionMessage(error, 'Failed to deduplicate services.'));
+    }
+  };
+
+  const handleUpdateServiceDate = async (serviceId: string, nextDate: string) => {
+    if (!isAdmin) {
+      throw new Error('Admin access is required to edit service dates.');
+    }
+
+    try {
+      const result = await updateServiceDateInFirebase({ serviceId, nextDate });
+
+      setServices((current) =>
+        current.map((service) =>
+          service.id === serviceId
+            ? {
+                ...service,
+                date: result.date,
+              }
+            : service,
+        ),
+      );
+    } catch (error) {
+      throw new Error(getFirebaseActionMessage(error, 'Failed to update service date.'));
     }
   };
 
@@ -1046,6 +1070,8 @@ export default function App() {
           isAdmin={isAdmin}
           currentUserEmail={userEmail || auth.currentUser?.email || null}
           handleFiles={handleFiles}
+          services={services}
+          updateServiceDate={handleUpdateServiceDate}
           servicesCount={services.length}
           songsCount={masterSongs.length}
           lastSyncTime={lastSyncTime}

@@ -138,21 +138,26 @@ export function useSongFiltering({
     };
 
     if (lookupPreset !== 'date') {
-      const latestDate = normalizedServices.reduce((latest, service) => (
-        service.canonicalDate > latest ? service.canonicalDate : latest
-      ), normalizedServices[0].canonicalDate);
-
-      const weeks = lookupPreset === 'last1' ? 1 : lookupPreset === 'last4' ? 4 : 12;
-      const cutoffDate = subWeeks(latestDate, weeks - 1);
-      const matchedServices = normalizedServices.filter(
-        (service) => service.canonicalDate >= cutoffDate && service.canonicalDate <= latestDate,
+      const sundayServices = normalizedServices.filter((service) =>
+        isSunday(service.canonicalDate),
       );
 
+      const today = new Date();
+      const anchorSunday = isSunday(today) ? today : previousSunday(today);
+      const weeks = lookupPreset === 'last1' ? 1 : lookupPreset === 'last4' ? 4 : 12;
+      const cutoffDate = subWeeks(anchorSunday, weeks - 1);
+      const matchedServices = sundayServices.filter(
+        (service) => service.canonicalDate >= cutoffDate && service.canonicalDate <= anchorSunday,
+      );
       const aggregated = aggregateSongs(matchedServices);
+
       return {
         mode: lookupPreset,
-        label: weeks === 1 ? 'last week' : `last ${weeks} weeks`,
-        date: latestDate,
+        label:
+          weeks === 1
+            ? `last week ending ${anchorSunday.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })}`
+            : `last ${weeks} weeks ending ${anchorSunday.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })}`,
+        date: anchorSunday,
         am: aggregated.am,
         pm: aggregated.pm,
       };
