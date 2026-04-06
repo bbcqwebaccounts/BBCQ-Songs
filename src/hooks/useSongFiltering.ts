@@ -1,6 +1,15 @@
 import { useMemo } from 'react';
-import { isValid, isSunday, previousSunday, nextSunday, isSameDay } from 'date-fns';
+import {
+  isValid,
+  isSunday,
+  previousSunday,
+  nextSunday,
+  isSameDay,
+  parse,
+  subWeeks,
+} from 'date-fns';
 import { SongUsage, ServiceData } from '../types';
+import { extractDateFromFilename } from '../lib/songUtils';
 
 interface UseSongFilteringProps {
   allSongs: SongUsage[];
@@ -13,6 +22,7 @@ interface UseSongFilteringProps {
   includeLyricsInSearch: boolean;
   sortConfig: { key: string; direction: 'asc' | 'desc' };
   lookupDate: string;
+  lookupPreset: 'date' | 'last1' | 'last4' | 'last12';
   topChartHeight: number;
 }
 
@@ -27,6 +37,7 @@ export function useSongFiltering({
   includeLyricsInSearch,
   sortConfig,
   lookupDate,
+  lookupPreset,
   topChartHeight
 }: UseSongFilteringProps) {
   const numTopSongs = Math.max(5, Math.floor((topChartHeight - 60) / 30));
@@ -96,9 +107,60 @@ export function useSongFiltering({
   }, [themes]);
 
   const lookupResults = useMemo(() => {
-    if (!lookupDate || services.length === 0) return null;
-    
-    const targetDate = new Date(lookupDate);
+    if (services.length === 0) return null;
+
+    // Prefer the filename-derived service date because several imports were stored a day early.
+    const normalizedServices = services.map((service) => ({
+      ...service,
+      canonicalDate: extractDateFromFilename(service.fileName, service.date),
+    }));
+
+    const aggregateSongs = (matchedServices: typeof normalizedServices) => {
+      const amCounts = new Map<string, number>();
+      const pmCounts = new Map<string, number>();
+
+      matchedServices.forEach((service) => {
+        const targetMap = service.serviceType === 'PM' ? pmCounts : amCounts;
+        service.songs.forEach((song) => {
+          targetMap.set(song, (targetMap.get(song) || 0) + 1);
+        });
+      });
+
+      const formatEntries = (entries: Map<string, number>) =>
+        Array.from(entries.entries())
+          .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0], undefined, { numeric: true, sensitivity: 'base' }))
+          .map(([song, count]) => (count > 1 ? `${song} (${count})` : song));
+
+      return {
+        am: formatEntries(amCounts),
+        pm: formatEntries(pmCounts),
+      };
+    };
+
+    if (lookupPreset !== 'date') {
+      const latestDate = normalizedServices.reduce((latest, service) => (
+        service.canonicalDate > latest ? service.canonicalDate : latest
+      ), normalizedServices[0].canonicalDate);
+
+      const weeks = lookupPreset === 'last1' ? 1 : lookupPreset === 'last4' ? 4 : 12;
+      const cutoffDate = subWeeks(latestDate, weeks - 1);
+      const matchedServices = normalizedServices.filter(
+        (service) => service.canonicalDate >= cutoffDate && service.canonicalDate <= latestDate,
+      );
+
+      const aggregated = aggregateSongs(matchedServices);
+      return {
+        mode: lookupPreset,
+        label: weeks === 1 ? 'last week' : `last ${weeks} weeks`,
+        date: latestDate,
+        am: aggregated.am,
+        pm: aggregated.pm,
+      };
+    }
+
+    if (!lookupDate) return null;
+
+    const targetDate = parse(lookupDate, 'yyyy-MM-dd', new Date());
     if (!isValid(targetDate)) return null;
 
     let nearestSunday = targetDate;
@@ -108,16 +170,18 @@ export function useSongFiltering({
       nearestSunday = Math.abs(targetDate.getTime() - prev.getTime()) < Math.abs(targetDate.getTime() - next.getTime()) ? prev : next;
     }
 
-    const matchedServices = services.filter(s => isSameDay(s.date, nearestSunday));
+    const matchedServices = normalizedServices.filter((s) => isSameDay(s.canonicalDate, nearestSunday));
     const amService = matchedServices.find(s => s.serviceType === 'AM');
     const pmService = matchedServices.find(s => s.serviceType === 'PM');
 
     return {
+      mode: 'date',
+      label: `Sunday, ${nearestSunday.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })}`,
       date: nearestSunday,
       am: amService?.songs || [],
       pm: pmService?.songs || []
     };
-  }, [lookupDate, services]);
+  }, [lookupDate, lookupPreset, services]);
 
   return {
     dynamicTopSongs,
