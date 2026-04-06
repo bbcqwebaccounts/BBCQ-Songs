@@ -1,6 +1,6 @@
 import React, { useState, useCallback, useMemo, useEffect, useRef } from 'react';
 import JSZip from 'jszip';
-import { format, parse, isValid, eachMonthOfInterval, startOfMonth, endOfMonth, isSameMonth, isSunday, previousSunday, nextSunday, isSameDay, eachWeekOfInterval, startOfWeek, endOfWeek, isSameWeek, eachYearOfInterval, startOfYear, endOfYear, isSameYear } from 'date-fns';
+import { format, parse, isValid, eachMonthOfInterval, startOfMonth, endOfMonth, isSameMonth, isSunday, previousSunday, nextSunday, isSameDay, eachWeekOfInterval, startOfWeek, endOfWeek, isSameWeek, eachYearOfInterval, startOfYear, endOfYear, isSameYear, subWeeks } from 'date-fns';
 import { Upload, Calendar, Music, Search, BarChart3, TrendingUp, X, Info, ArrowUpDown, ChevronDown, ChevronUp, Save, Sparkles, Loader2, CheckCircle2, Settings, Cloud, CloudOff, RefreshCw, Database } from 'lucide-react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -59,6 +59,7 @@ export default function App() {
   const [viewingSong, setViewingSong] = useState<SongUsage | null>(null);
   const [sortConfig, setSortConfig] = useState<{ key: string; direction: 'asc' | 'desc' }>({ key: 'title', direction: 'asc' });
   const [lookupDate, setLookupDate] = useState<string>('');
+  const [lookupPreset, setLookupPreset] = useState<'date' | 'last1' | 'last4' | 'last12'>('date');
   const [timeScale, setTimeScale] = useState<'weekly' | 'monthly' | 'yearly'>('yearly');
   const [masterSongs, setMasterSongs] = useState<any[]>([]);
   const [isLoaded, setIsLoaded] = useState(false);
@@ -256,6 +257,7 @@ export default function App() {
     includeLyricsInSearch,
     sortConfig,
     lookupDate,
+    lookupPreset,
     topChartHeight
   });
 
@@ -380,6 +382,23 @@ export default function App() {
   const SortIcon = ({ columnKey }: { columnKey: string }) => {
     if (sortConfig.key !== columnKey) return <ArrowUpDown className="h-4 w-4 ml-1 text-slate-400 inline" />;
     return sortConfig.direction === 'asc' ? <ChevronUp className="h-4 w-4 ml-1 text-indigo-600 inline" /> : <ChevronDown className="h-4 w-4 ml-1 text-indigo-600 inline" />;
+  };
+
+  const latestServiceDate = useMemo(() => {
+    if (services.length === 0) return null;
+    return services.reduce((latest, service) => {
+      const serviceDate = extractDateFromFilename(service.fileName, service.date);
+      return serviceDate > latest ? serviceDate : latest;
+    }, extractDateFromFilename(services[0].fileName, services[0].date));
+  }, [services]);
+
+  const handleLookupPreset = (preset: 'last1' | 'last4' | 'last12') => {
+    setLookupPreset(preset);
+    if (!latestServiceDate) return;
+
+    const weeks = preset === 'last1' ? 1 : preset === 'last4' ? 4 : 12;
+    const targetDate = subWeeks(latestServiceDate, weeks - 1);
+    setLookupDate(format(targetDate, 'yyyy-MM-dd'));
   };
 
   if (!isAuthReady) {
@@ -547,14 +566,43 @@ export default function App() {
               <CardContent>
                 <div className="flex flex-col md:flex-row gap-6">
                   <div className="w-full md:w-1/3">
-                    <Input 
-                      type="date" 
-                      value={lookupDate} 
-                      onChange={(e) => setLookupDate(e.target.value)} 
+                    <Input
+                      type="date"
+                      value={lookupDate}
+                      onChange={(e) => {
+                        setLookupPreset('date');
+                        setLookupDate(e.target.value);
+                      }}
                     />
+                    <div className="flex flex-wrap gap-2 mt-3">
+                      <Button
+                        type="button"
+                        variant={lookupPreset === 'last1' ? 'default' : 'outline'}
+                        size="sm"
+                        onClick={() => handleLookupPreset('last1')}
+                      >
+                        Last Week
+                      </Button>
+                      <Button
+                        type="button"
+                        variant={lookupPreset === 'last4' ? 'default' : 'outline'}
+                        size="sm"
+                        onClick={() => handleLookupPreset('last4')}
+                      >
+                        Last 4 Weeks
+                      </Button>
+                      <Button
+                        type="button"
+                        variant={lookupPreset === 'last12' ? 'default' : 'outline'}
+                        size="sm"
+                        onClick={() => handleLookupPreset('last12')}
+                      >
+                        Last 12 Weeks
+                      </Button>
+                    </div>
                     {lookupResults && (
                       <p className="text-sm text-slate-500 mt-2">
-                        Showing services for Sunday, {format(lookupResults.date, 'MMM d, yyyy')}
+                        Showing services for {lookupResults.label}
                       </p>
                     )}
                   </div>
@@ -911,7 +959,12 @@ export default function App() {
                                 {song.count === 0 ? (
                                   <span className="text-slate-400 italic">Never</span>
                                 ) : (
-                                  format(song.lastUsed, 'MMM d, yyyy')
+                                  <>
+                                    {format(song.lastUsed, 'MMM d, yyyy')}
+                                    <span className="ml-2 text-xs text-slate-500">
+                                      {song.datesUsed[0]?.type || ''}
+                                    </span>
+                                  </>
                                 )}
                               </TableCell>
                               <TableCell className="text-right">
