@@ -1,7 +1,7 @@
 import React, { useState, useCallback, useMemo, useEffect, useRef } from 'react';
 import JSZip from 'jszip';
 import { format, parse, isValid, eachMonthOfInterval, startOfMonth, endOfMonth, isSameMonth, isSunday, previousSunday, nextSunday, isSameDay, eachWeekOfInterval, startOfWeek, endOfWeek, isSameWeek, eachYearOfInterval, startOfYear, endOfYear, isSameYear, subWeeks } from 'date-fns';
-import { Upload, Calendar, Music, Search, BarChart3, TrendingUp, X, Info, ArrowUpDown, ChevronDown, ChevronUp, Save, Sparkles, Loader2, CheckCircle2, Settings, Cloud, CloudOff, RefreshCw, Database } from 'lucide-react';
+import { Upload, Calendar, Music, Search, BarChart3, TrendingUp, X, Info, ArrowUpDown, ChevronDown, ChevronUp, ChevronLeft, ChevronRight, Save, Sparkles, Loader2, CheckCircle2, Settings, Cloud, CloudOff, RefreshCw, Database } from 'lucide-react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
@@ -416,6 +416,21 @@ export default function App() {
     }, extractDateFromFilename(services[0].fileName, services[0].date));
   }, [services]);
 
+  const getNearestSunday = useCallback((date: Date) => {
+    if (isSunday(date)) {
+      return date;
+    }
+
+    const prev = previousSunday(date);
+    const next = nextSunday(date);
+    return Math.abs(date.getTime() - prev.getTime()) < Math.abs(date.getTime() - next.getTime()) ? prev : next;
+  }, []);
+
+  const currentSunday = useMemo(() => {
+    const today = new Date();
+    return isSunday(today) ? today : previousSunday(today);
+  }, []);
+
   const handleLookupPreset = (preset: 'last1' | 'last4' | 'last12') => {
     setLookupPreset(preset);
     if (!latestServiceDate) return;
@@ -424,6 +439,33 @@ export default function App() {
     const targetDate = subWeeks(latestServiceDate, weeks - 1);
     setLookupDate(format(targetDate, 'yyyy-MM-dd'));
   };
+
+  const handleLookupWeekShift = useCallback((direction: 'previous' | 'next') => {
+    const baseDate =
+      lookupDate && isValid(parse(lookupDate, 'yyyy-MM-dd', new Date()))
+        ? parse(lookupDate, 'yyyy-MM-dd', new Date())
+        : currentSunday;
+
+    const baseSunday = getNearestSunday(baseDate);
+    const shiftedDate = new Date(baseSunday);
+    shiftedDate.setDate(baseSunday.getDate() + (direction === 'previous' ? -7 : 7));
+
+    if (direction === 'next' && shiftedDate > currentSunday) {
+      return;
+    }
+
+    setLookupPreset('date');
+    setLookupDate(format(shiftedDate, 'yyyy-MM-dd'));
+  }, [currentSunday, getNearestSunday, lookupDate]);
+
+  const isLookupForwardDisabled = useMemo(() => {
+    const baseDate =
+      lookupDate && isValid(parse(lookupDate, 'yyyy-MM-dd', new Date()))
+        ? parse(lookupDate, 'yyyy-MM-dd', new Date())
+        : currentSunday;
+
+    return getNearestSunday(baseDate) >= currentSunday;
+  }, [currentSunday, getNearestSunday, lookupDate]);
 
   if (!isAuthReady) {
     return (
@@ -590,14 +632,35 @@ export default function App() {
               <CardContent>
                 <div className="flex flex-col md:flex-row gap-6">
                   <div className="w-full md:w-1/3">
-                    <Input
-                      type="date"
-                      value={lookupDate}
-                      onChange={(e) => {
-                        setLookupPreset('date');
-                        setLookupDate(e.target.value);
-                      }}
-                    />
+                    <div className="flex items-center gap-2">
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="icon-sm"
+                        onClick={() => handleLookupWeekShift('previous')}
+                        aria-label="Go to previous week"
+                      >
+                        <ChevronLeft className="h-4 w-4" />
+                      </Button>
+                      <Input
+                        type="date"
+                        value={lookupDate}
+                        onChange={(e) => {
+                          setLookupPreset('date');
+                          setLookupDate(e.target.value);
+                        }}
+                      />
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="icon-sm"
+                        onClick={() => handleLookupWeekShift('next')}
+                        disabled={isLookupForwardDisabled}
+                        aria-label="Go to next week"
+                      >
+                        <ChevronRight className="h-4 w-4" />
+                      </Button>
+                    </div>
                     <div className="flex flex-wrap gap-2 mt-3">
                       <Button
                         type="button"
