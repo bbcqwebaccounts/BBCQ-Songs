@@ -72,6 +72,7 @@ export default function App() {
   const [topChartHeight, setTopChartHeight] = useState(300);
   const topChartRef = useRef<HTMLDivElement>(null);
   const hasAutoSelected = useRef(false);
+  const hasAutoSelectedLookup = useRef(false);
 
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [songSettingsSearch, setSongSettingsSearch] = useState('');
@@ -189,6 +190,7 @@ export default function App() {
       setSelectedSongsForChart([]);
       setLookupDate('');
       hasAutoSelected.current = false;
+      hasAutoSelectedLookup.current = false;
       toast.success("All data has been cleared.");
     } catch (e) {
       console.error('Failed to clear Firebase data.', e);
@@ -416,6 +418,22 @@ export default function App() {
     }, extractDateFromFilename(services[0].fileName, services[0].date));
   }, [services]);
 
+  const latestSundayWithSongs = useMemo(() => {
+    const matchingServices = services.filter((service) => {
+      const canonicalDate = extractDateFromFilename(service.fileName, service.date);
+      return service.songs.length > 0 && isSunday(canonicalDate);
+    });
+
+    if (matchingServices.length === 0) {
+      return null;
+    }
+
+    return matchingServices.reduce((latest, service) => {
+      const canonicalDate = extractDateFromFilename(service.fileName, service.date);
+      return canonicalDate > latest ? canonicalDate : latest;
+    }, extractDateFromFilename(matchingServices[0].fileName, matchingServices[0].date));
+  }, [services]);
+
   const getNearestSunday = useCallback((date: Date) => {
     if (isSunday(date)) {
       return date;
@@ -466,6 +484,16 @@ export default function App() {
 
     return getNearestSunday(baseDate) >= currentSunday;
   }, [currentSunday, getNearestSunday, lookupDate]);
+
+  useEffect(() => {
+    if (!isLoaded || hasAutoSelectedLookup.current || lookupDate || !latestSundayWithSongs) {
+      return;
+    }
+
+    setLookupPreset('date');
+    setLookupDate(format(latestSundayWithSongs, 'yyyy-MM-dd'));
+    hasAutoSelectedLookup.current = true;
+  }, [isLoaded, latestSundayWithSongs, lookupDate]);
 
   if (!isAuthReady) {
     return (
