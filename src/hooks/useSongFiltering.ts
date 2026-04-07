@@ -77,6 +77,11 @@ export function useSongFiltering({
     }
     
     result.sort((a, b) => {
+      const getLatestServiceTypeRank = (song: SongUsage) => {
+        const latestType = song.datesUsed[0]?.type;
+        return latestType === 'PM' ? 1 : 0;
+      };
+
       if (sortConfig.key === 'title') {
         return sortConfig.direction === 'asc' ? a.title.localeCompare(b.title, undefined, { numeric: true, sensitivity: 'base' }) : b.title.localeCompare(a.title, undefined, { numeric: true, sensitivity: 'base' });
       }
@@ -84,7 +89,21 @@ export function useSongFiltering({
         return sortConfig.direction === 'asc' ? a.count - b.count : b.count - a.count;
       }
       if (sortConfig.key === 'lastUsed') {
-        return sortConfig.direction === 'asc' ? a.lastUsed.getTime() - b.lastUsed.getTime() : b.lastUsed.getTime() - a.lastUsed.getTime();
+        const dateDiff = sortConfig.direction === 'asc'
+          ? a.lastUsed.getTime() - b.lastUsed.getTime()
+          : b.lastUsed.getTime() - a.lastUsed.getTime();
+        if (dateDiff !== 0) {
+          return dateDiff;
+        }
+
+        const typeDiff = sortConfig.direction === 'asc'
+          ? getLatestServiceTypeRank(a) - getLatestServiceTypeRank(b)
+          : getLatestServiceTypeRank(b) - getLatestServiceTypeRank(a);
+        if (typeDiff !== 0) {
+          return typeDiff;
+        }
+
+        return a.title.localeCompare(b.title, undefined, { numeric: true, sensitivity: 'base' });
       }
       if (sortConfig.key === 'status') {
         const getStatusVal = (song: SongUsage) => {
