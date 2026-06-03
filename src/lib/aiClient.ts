@@ -14,8 +14,8 @@ const OPENAI_PROXY_PATH = '/api/openai';
 
 export function getConfiguredAiProviders(): AIProvider[] {
   const providers: AIProvider[] = [];
-  if (GEMINI_API_KEY) providers.push('gemini');
   providers.push('openai');
+  if (GEMINI_API_KEY) providers.push('gemini');
   return providers;
 }
 
