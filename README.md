@@ -15,6 +15,18 @@ View your app in AI Studio: https://ai.studio/apps/df538654-5480-4d26-99ea-2b722
 
 1. Install dependencies:
    `npm install`
-2. Set the `GEMINI_API_KEY` in [.env.local](.env.local) to your Gemini API key
+2. Optional: set the `GEMINI_API_KEY` in [.env.local](.env.local) to your Gemini API key
 3. Run the app:
    `npm run dev`
+
+## Cloudflare Pages AI setup
+
+The OpenAI recommender uses a Cloudflare Pages Function at `/api/openai`.
+Set this environment variable in Cloudflare Pages, not in GitHub:
+
+- `OPENAI_API_KEY`
+
+Optional model overrides:
+
+- `OPENAI_MODEL`
+- `OPENAI_EMBEDDING_MODEL`
