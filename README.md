@@ -29,4 +29,4 @@ Set this environment variable in Cloudflare Pages, not in GitHub:
 Optional model overrides:
 
 - `OPENAI_MODEL`
-- `OPENAI_EMBEDDING_MODEL`
+- `OPENAI_EMBEDDING_MODEL` 
