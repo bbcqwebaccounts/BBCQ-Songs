@@ -2,7 +2,6 @@ import { GoogleGenAI } from '@google/genai';
 import { AIProvider } from '../types';
 
 const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
-const OPENAI_API_KEY = process.env.OPENAI_API_KEY;
 
 const GEMINI_TEXT_MODEL = process.env.GEMINI_MODEL || 'gemini-3-flash-preview';
 const GEMINI_EMBEDDING_MODEL =
@@ -11,12 +10,12 @@ const OPENAI_TEXT_MODEL = process.env.OPENAI_MODEL || 'gpt-4.1-mini';
 const OPENAI_EMBEDDING_MODEL =
   process.env.OPENAI_EMBEDDING_MODEL || 'text-embedding-3-small';
 
-const OPENAI_API_BASE = 'https://api.openai.com/v1';
+const OPENAI_PROXY_PATH = '/api/openai';
 
 export function getConfiguredAiProviders(): AIProvider[] {
   const providers: AIProvider[] = [];
   if (GEMINI_API_KEY) providers.push('gemini');
-  if (OPENAI_API_KEY) providers.push('openai');
+  providers.push('openai');
   return providers;
 }
 
@@ -111,13 +110,13 @@ async function createEmbeddings(
     return result.embeddings.map((item) => item.values);
   }
 
-  const response = await fetchWithFriendlyErrors(`${OPENAI_API_BASE}/embeddings`, {
+  const response = await fetchWithFriendlyErrors(OPENAI_PROXY_PATH, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
-      Authorization: `Bearer ${OPENAI_API_KEY}`,
     },
     body: JSON.stringify({
+      type: 'embeddings',
       model: OPENAI_EMBEDDING_MODEL,
       input,
     }),
@@ -146,17 +145,16 @@ async function generateJsonText(provider: AIProvider, prompt: string) {
     return response.text || '';
   }
 
-  const response = await fetchWithFriendlyErrors(`${OPENAI_API_BASE}/responses`, {
+  const response = await fetchWithFriendlyErrors(OPENAI_PROXY_PATH, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
-      Authorization: `Bearer ${OPENAI_API_KEY}`,
     },
     body: JSON.stringify({
+      type: 'responses',
       model: OPENAI_TEXT_MODEL,
       input: `${prompt}\n\nReturn only valid JSON. Do not wrap the JSON in markdown fences or add commentary.`,
       max_output_tokens: 2500,
-      store: false,
     }),
   }, 'OpenAI text generation');
 
@@ -186,7 +184,7 @@ async function generateJsonText(provider: AIProvider, prompt: string) {
 async function extractOpenAIError(response: Response) {
   try {
     const json = await response.json();
-    return json?.error?.message || `OpenAI request failed with status ${response.status}.`;
+    return json?.error?.message || json?.error || `OpenAI request failed with status ${response.status}.`;
   } catch {
     return `OpenAI request failed with status ${response.status}.`;
   }
@@ -204,7 +202,7 @@ async function fetchWithFriendlyErrors(
       error instanceof Error ? error.message : 'Unknown network error';
 
     throw new Error(
-      `${context} failed to reach the API. ${message}. This is usually a browser/network block rather than a Firebase issue. If you are using Brave, disable Shields for this site or allow requests to api.openai.com, then retry.`,
+      `${context} failed to reach the site AI proxy. ${message}. Check that the Cloudflare Pages Function is deployed and OPENAI_API_KEY is set in Cloudflare Pages environment variables.`,
     );
   }
 }
