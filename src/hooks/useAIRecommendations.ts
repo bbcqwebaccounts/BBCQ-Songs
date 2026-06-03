@@ -49,18 +49,26 @@ export function useAIRecommendations(allSongs: any[]) {
               }))
               .sort((a, b) => b.score - a.score);
 
-            candidateSongs = scoredSongs.slice(0, 100);
+            candidateSongs = mergeSongCandidates(
+              scoredSongs.slice(0, 100),
+              rankSongsByText(candidateSongs, aiPrompt).slice(0, 80),
+            ).slice(0, 150);
+          } else {
+            candidateSongs = rankSongsByText(candidateSongs, aiPrompt).slice(0, 150);
           }
         } catch (error) {
           console.warn('Embedding retrieval failed; continuing without vector search.', error);
+          candidateSongs = rankSongsByText(candidateSongs, aiPrompt).slice(0, 150);
         }
+      } else {
+        candidateSongs = rankSongsByText(candidateSongs, aiPrompt).slice(0, 150);
       }
 
       const songContext = candidateSongs
         .slice(0, 150)
         .map(
           (song) =>
-            `${song.title} (Themes: ${song.themes?.join(', ') || 'None'})\nLyrics Snippet: ${song.lyrics?.substring(0, 220).replace(/\n/g, ' ') || 'None'}...`,
+            `Title: ${song.title}\nThemes: ${song.themes?.join(', ') || 'None'}\nLyrics Snippet: ${song.lyrics?.substring(0, 220).replace(/\n/g, ' ') || 'None'}...`,
         )
         .join('\n\n');
 
@@ -74,18 +82,24 @@ ${songContext}
 ${existingTitles.length > 0 ? `Do NOT recommend these songs as they are already listed: ${existingTitles.join(', ')}.` : ''}
 
 Return only a JSON array of objects with:
-- "title": must exactly match a song title from the list
+- "title": must exactly match a full song title from the list, including the hymn code such as BH104 or TH100
 - "reason": a short 1-2 sentence explanation of why it fits`;
 
       const { result } = await generateJsonWithFallback<{ title: string; reason: string }[]>(prompt);
-      const filtered = (Array.isArray(result) ? result : []).filter((rec) =>
-        allSongs.some((song) => song.title === rec.title),
-      );
+      const filtered = normalizeRecommendations(Array.isArray(result) ? result : [], allSongs);
+      const nextRecommendations =
+        filtered.length > 0
+          ? filtered
+          : candidateSongs.slice(0, append ? 3 : 5).map((song) => ({
+              title: song.title,
+              reason:
+                'This was one of the closest available matches from the song index for the requested theme.',
+            }));
 
       if (append && aiRecommendations) {
-        setAiRecommendations([...aiRecommendations, ...filtered]);
+        setAiRecommendations([...aiRecommendations, ...nextRecommendations]);
       } else {
-        setAiRecommendations(filtered);
+        setAiRecommendations(nextRecommendations);
       }
     } catch (error) {
       console.error('AI recommendation failed:', error);
@@ -239,4 +253,107 @@ Return only a JSON array of objects with:
     handleProcessEmbeddings,
     handleGenerateMissingThemes,
   };
+}
+
+function mergeSongCandidates(primary: any[], secondary: any[]) {
+  const seen = new Set<string>();
+  return [...primary, ...secondary].filter((song) => {
+    if (!song?.title || seen.has(song.title)) return false;
+    seen.add(song.title);
+    return true;
+  });
+}
+
+function rankSongsByText(songs: any[], prompt: string) {
+  const terms = tokenize(prompt);
+  if (terms.length === 0) return songs;
+
+  return [...songs]
+    .map((song) => ({
+      ...song,
+      textScore: scoreSongText(song, terms),
+    }))
+    .sort((a, b) => b.textScore - a.textScore);
+}
+
+function scoreSongText(song: any, terms: string[]) {
+  const title = normalizeText(song.title);
+  const themes = normalizeText((song.themes || []).join(' '));
+  const lyrics = normalizeText(song.lyrics || '');
+
+  return terms.reduce((score, term) => {
+    let nextScore = score;
+    if (title.includes(term)) nextScore += 8;
+    if (themes.includes(term)) nextScore += 5;
+    if (lyrics.includes(term)) nextScore += 1;
+    return nextScore;
+  }, 0);
+}
+
+function normalizeRecommendations(
+  recommendations: { title: string; reason: string }[],
+  allSongs: any[],
+) {
+  const byExactTitle = new Map(allSongs.map((song) => [song.title, song.title]));
+  const byNormalizedTitle = new Map(
+    allSongs.map((song) => [normalizeTitle(song.title), song.title]),
+  );
+  const byCode = new Map(
+    allSongs
+      .map((song) => [getSongCode(song.title), song.title] as const)
+      .filter(([code]) => Boolean(code)),
+  );
+  const titleOptions = allSongs.map((song) => ({
+    title: song.title,
+    normalized: normalizeTitle(song.title),
+    withoutCode: normalizeTitle(stripSongCode(song.title)),
+  }));
+  const seen = new Set<string>();
+
+  return recommendations
+    .map((rec) => {
+      const normalizedRecTitle = normalizeTitle(rec.title);
+      const recCode = getSongCode(rec.title);
+      const title =
+        byExactTitle.get(rec.title) ||
+        byNormalizedTitle.get(normalizedRecTitle) ||
+        (recCode ? byCode.get(recCode) : undefined) ||
+        titleOptions.find(
+          (option) =>
+            option.withoutCode === normalizedRecTitle ||
+            option.withoutCode.startsWith(normalizedRecTitle) ||
+            normalizedRecTitle.startsWith(option.withoutCode),
+        )?.title;
+
+      if (!title || seen.has(title)) return null;
+      seen.add(title);
+
+      return {
+        title,
+        reason: rec.reason || 'This song fits the requested theme.',
+      };
+    })
+    .filter(Boolean) as { title: string; reason: string }[];
+}
+
+function tokenize(text: string) {
+  return normalizeText(text)
+    .split(/\s+/)
+    .filter((term) => term.length > 2);
+}
+
+function normalizeText(text: string) {
+  return text.toLowerCase().replace(/[^a-z0-9\s]/g, ' ');
+}
+
+function normalizeTitle(title: string) {
+  return normalizeText(title).replace(/\s+/g, ' ').trim();
+}
+
+function getSongCode(title: string) {
+  return title.match(/^[A-Z]{1,4}\d+[A-Z]?/i)?.[0].toUpperCase() || '';
+}
+
+function stripSongCode(title: string) {
+  return title.replace(/^[A-Z]{1,4}\d+[A-Z]?\s*:\s*/i, '');
 }
