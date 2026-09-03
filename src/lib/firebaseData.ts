@@ -450,6 +450,38 @@ export async function updateServiceDateInFirebase({
   };
 }
 
+export async function updateServiceSongsInFirebase({
+  serviceId,
+  songs,
+}: {
+  serviceId: string;
+  songs: string[];
+}) {
+  if (!serviceId.trim()) {
+    throw new Error('A Firebase service record ID is required.');
+  }
+
+  const normalizedSongs = Array.from(
+    new Set(
+      songs
+        .map((song) => song.trim())
+        .filter(Boolean),
+    ),
+  );
+
+  if (normalizedSongs.length > 100) {
+    throw new Error('A service cannot contain more than 100 songs.');
+  }
+
+  await updateDoc(doc(db, 'services', serviceId), {
+    songs: normalizedSongs,
+  });
+
+  return {
+    songs: normalizedSongs,
+  };
+}
+
 function normalizeServiceRecord(service: RawService): ServiceData {
   return {
     ...service,

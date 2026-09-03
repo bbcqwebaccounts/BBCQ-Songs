@@ -3,7 +3,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } f
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Search, Loader2, Sparkles, Database, CheckCircle2, X, Tags, Cloud, Save, Trash2, Calendar } from 'lucide-react';
+import { Search, Loader2, Sparkles, Database, CheckCircle2, X, Tags, Cloud, Save, Trash2, Calendar, ListMusic } from 'lucide-react';
 import { SongUsage, SongMeta, ServiceData } from '../types';
 import { toast } from 'sonner';
 import { format } from 'date-fns';
@@ -37,6 +37,7 @@ interface UnifiedSettingsDialogProps {
   ) => Promise<void>;
   services: ServiceData[];
   updateServiceDate: (serviceId: string, nextDate: string) => Promise<void>;
+  editServiceSongs: (service: ServiceData) => void;
   servicesCount: number;
   songsCount: number;
   lastSyncTime: Date | null;
@@ -64,6 +65,7 @@ export function UnifiedSettingsDialog({
   handleFiles,
   services,
   updateServiceDate,
+  editServiceSongs,
   servicesCount,
   songsCount,
   lastSyncTime
@@ -321,9 +323,9 @@ export function UnifiedSettingsDialog({
 
               <div className="bg-white border rounded-lg p-6 space-y-4 shadow-sm">
                 <div>
-                  <h3 className="text-lg font-medium text-slate-900">Edit Service Dates</h3>
+                  <h3 className="text-lg font-medium text-slate-900">Edit Service History</h3>
                   <p className="text-sm text-slate-500 mt-1">
-                    Correct stored service dates when a file was imported with the wrong day. Files without a date in the filename are especially likely to have used the file modified date instead.
+                    Correct a stored date or edit the songs recorded against an individual service.
                   </p>
                 </div>
                 <div className="flex items-center gap-2">
@@ -408,6 +410,15 @@ export function UnifiedSettingsDialog({
                                 )}
                                 Save Date
                               </Button>
+                              <Button
+                                type="button"
+                                variant="outline"
+                                disabled={!service.id || !isAdmin}
+                                onClick={() => editServiceSongs(service)}
+                              >
+                                <ListMusic className="h-4 w-4 mr-2" />
+                                Edit Songs
+                              </Button>
                             </div>
                           </div>
                         );
@@ -416,7 +427,7 @@ export function UnifiedSettingsDialog({
                   </div>
                 </div>
                 <p className="text-xs text-slate-500">
-                  Showing the 100 most recent matching services. Editing dates requires admin access.
+                  Showing the 100 most recent matching services. Editing service history requires admin access.
                 </p>
               </div>
 

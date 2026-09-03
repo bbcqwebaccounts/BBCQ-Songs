@@ -1,7 +1,7 @@
 import React, { useState, useCallback, useMemo, useEffect, useRef } from 'react';
 import JSZip from 'jszip';
 import { format, parse, isValid, eachMonthOfInterval, startOfMonth, endOfMonth, isSameMonth, isSunday, previousSunday, nextSunday, isSameDay, eachWeekOfInterval, startOfWeek, endOfWeek, isSameWeek, eachYearOfInterval, startOfYear, endOfYear, isSameYear, subWeeks } from 'date-fns';
-import { Upload, Calendar, Music, Search, BarChart3, TrendingUp, X, Info, ArrowUpDown, ChevronDown, ChevronUp, ChevronLeft, ChevronRight, Save, Sparkles, Loader2, CheckCircle2, Settings, Cloud, CloudOff, RefreshCw, Database } from 'lucide-react';
+import { Upload, Calendar, Music, Search, BarChart3, TrendingUp, X, Info, ArrowUpDown, ChevronDown, ChevronUp, ChevronLeft, ChevronRight, Save, Sparkles, Loader2, CheckCircle2, Settings, Cloud, CloudOff, RefreshCw, Database, PencilLine } from 'lucide-react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
@@ -26,6 +26,7 @@ import { UnifiedSettingsDialog } from './components/UnifiedSettingsDialog';
 import { ConsolidateDialog } from './components/ConsolidateDialog';
 import { SongDetailsDialog } from './components/SongDetailsDialog';
 import { AIRecommendations } from './components/AIRecommendations';
+import { ServiceEditDialog } from './components/ServiceEditDialog';
 import { useConsolidation } from './hooks/useConsolidation';
 import { useSongStats } from './hooks/useSongStats';
 import { useSongFiltering } from './hooks/useSongFiltering';
@@ -37,6 +38,7 @@ import {
   deleteSongEverywhere,
   getFirebaseActionMessage,
   updateServiceDateInFirebase,
+  updateServiceSongsInFirebase,
   updateSongDetailsInFirebase,
 } from './lib/firebaseData';
 import { toast } from 'sonner';
@@ -78,6 +80,7 @@ export default function App() {
   const [songSettingsSearch, setSongSettingsSearch] = useState('');
   const [syncStatus, setSyncStatus] = useState<string>('');
   const [lastSyncTime, setLastSyncTime] = useState<Date | null>(null);
+  const [editingService, setEditingService] = useState<ServiceData | null>(null);
 
   const { isAuthReady, userId, userEmail, isAdmin } = useFirebaseData({
     setServices,
@@ -240,6 +243,39 @@ export default function App() {
       );
     } catch (error) {
       throw new Error(getFirebaseActionMessage(error, 'Failed to update service date.'));
+    }
+  };
+
+  const openServiceEditor = (service: ServiceData) => {
+    if (!isAdmin) {
+      toast.error('Admin access is required to edit service history.');
+      return;
+    }
+
+    setIsSettingsOpen(false);
+    setEditingService(service);
+  };
+
+  const handleUpdateServiceSongs = async (serviceId: string, nextSongs: string[]) => {
+    if (!isAdmin) {
+      throw new Error('Admin access is required to edit service history.');
+    }
+
+    try {
+      const result = await updateServiceSongsInFirebase({ serviceId, songs: nextSongs });
+
+      setServices((current) =>
+        current.map((service) =>
+          service.id === serviceId
+            ? {
+                ...service,
+                songs: result.songs,
+              }
+            : service,
+        ),
+      );
+    } catch (error) {
+      throw new Error(getFirebaseActionMessage(error, 'Failed to update service history.'));
     }
   };
 
@@ -723,27 +759,59 @@ export default function App() {
                   </div>
                   <div className="w-full md:w-2/3 grid grid-cols-1 sm:grid-cols-2 gap-4">
                     <div className="border rounded-lg p-4 bg-slate-50">
-                      <h4 className="font-semibold text-slate-700 mb-2 flex items-center justify-between">
-                        AM Service
-                        <Badge variant="outline">{lookupResults?.am.length || 0} songs</Badge>
-                      </h4>
+                      <div className="mb-2 flex min-h-7 items-center justify-between gap-2">
+                        <h4 className="font-semibold text-slate-700">AM Service</h4>
+                        <div className="flex items-center gap-1">
+                          <Badge variant="outline">{lookupResults?.am.length || 0} songs</Badge>
+                          {isAdmin && lookupResults?.amService?.id && (
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              size="icon-sm"
+                              onClick={() => openServiceEditor(lookupResults.amService)}
+                              aria-label="Edit AM service songs"
+                              title="Edit service songs"
+                            >
+                              <PencilLine className="h-4 w-4" />
+                            </Button>
+                          )}
+                        </div>
+                      </div>
                       {lookupResults?.am.length ? (
                         <ul className="space-y-1 text-sm">
                           {lookupResults.am.map(song => <li key={song}>• {song}</li>)}
                         </ul>
+                      ) : lookupResults?.amService ? (
+                        <p className="text-sm text-slate-400 italic">No songs recorded for this service.</p>
                       ) : (
                         <p className="text-sm text-slate-400 italic">No AM service found for this date.</p>
                       )}
                     </div>
                     <div className="border rounded-lg p-4 bg-slate-50">
-                      <h4 className="font-semibold text-slate-700 mb-2 flex items-center justify-between">
-                        PM Service
-                        <Badge variant="outline">{lookupResults?.pm.length || 0} songs</Badge>
-                      </h4>
+                      <div className="mb-2 flex min-h-7 items-center justify-between gap-2">
+                        <h4 className="font-semibold text-slate-700">PM Service</h4>
+                        <div className="flex items-center gap-1">
+                          <Badge variant="outline">{lookupResults?.pm.length || 0} songs</Badge>
+                          {isAdmin && lookupResults?.pmService?.id && (
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              size="icon-sm"
+                              onClick={() => openServiceEditor(lookupResults.pmService)}
+                              aria-label="Edit PM service songs"
+                              title="Edit service songs"
+                            >
+                              <PencilLine className="h-4 w-4" />
+                            </Button>
+                          )}
+                        </div>
+                      </div>
                       {lookupResults?.pm.length ? (
                         <ul className="space-y-1 text-sm">
                           {lookupResults.pm.map(song => <li key={song}>• {song}</li>)}
                         </ul>
+                      ) : lookupResults?.pmService ? (
+                        <p className="text-sm text-slate-400 italic">No songs recorded for this service.</p>
                       ) : (
                         <p className="text-sm text-slate-400 italic">No PM service found for this date.</p>
                       )}
@@ -1163,9 +1231,20 @@ export default function App() {
           handleFiles={handleFiles}
           services={services}
           updateServiceDate={handleUpdateServiceDate}
+          editServiceSongs={openServiceEditor}
           servicesCount={services.length}
           songsCount={masterSongs.length}
           lastSyncTime={lastSyncTime}
+        />
+
+        <ServiceEditDialog
+          service={editingService}
+          open={editingService !== null}
+          onOpenChange={(open) => {
+            if (!open) setEditingService(null);
+          }}
+          availableSongs={stats.allSongs.map((song) => song.title)}
+          onSave={handleUpdateServiceSongs}
         />
 
         <Toaster />

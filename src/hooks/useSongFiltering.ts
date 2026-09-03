@@ -179,6 +179,8 @@ export function useSongFiltering({
         date: anchorSunday,
         am: aggregated.am,
         pm: aggregated.pm,
+        amService: null,
+        pmService: null,
       };
     }
 
@@ -203,7 +205,9 @@ export function useSongFiltering({
       label: `Sunday, ${nearestSunday.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })}`,
       date: nearestSunday,
       am: amService?.songs || [],
-      pm: pmService?.songs || []
+      pm: pmService?.songs || [],
+      amService: amService || null,
+      pmService: pmService || null,
     };
   }, [lookupDate, lookupPreset, services]);
 
